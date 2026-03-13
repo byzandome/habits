@@ -157,6 +157,13 @@ pub fn get_app_usage(
     db::get_app_usage_for_date(&conn, &date).map_err(|e| e.to_string())
 }
 
+/// Returns a `"data:image/png;base64,…"` string for the given process stem,
+/// or an empty string when the icon cannot be extracted.
+#[tauri::command]
+pub fn get_app_icon(app_name: String) -> String {
+    crate::app_icon::get_icon_base64(&app_name)
+}
+
 /// Persists settings and applies them immediately.
 #[tauri::command]
 pub fn set_settings(

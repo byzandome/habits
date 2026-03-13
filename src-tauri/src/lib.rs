@@ -1,3 +1,4 @@
+mod app_icon;
 mod commands;
 mod db;
 mod idle;
@@ -143,6 +144,7 @@ pub fn run() {
             commands::get_settings,
             commands::set_settings,
             commands::get_app_usage,
+            commands::get_app_icon,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

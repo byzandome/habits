@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { format } from 'date-fns';
 import { api } from '../api';
+import { getDisplayName, getFallbackDomain } from '../appMeta';
 import type { AppUsageStat } from '../types';
+
+// ── Module-level icon cache (survives re-renders, cleared on page refresh) ───
+const iconCache = new Map<string, string | null>();
+const iconPending = new Set<string>();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatHM(secs: number): string {
   const h = Math.floor(secs / 3600);
@@ -11,15 +19,148 @@ function formatHM(secs: number): string {
   return `${secs}s`;
 }
 
-function AppIcon() {
+/** djb2 hash → one of 8 vibrant palette colours. */
+function nameToColor(name: string): string {
+  const palette = [
+    '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B',
+    '#10B981', '#06B6D4', '#EF4444', '#84CC16',
+  ];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h << 5) - h) + name.charCodeAt(i);
+    h |= 0;
+  }
+  return palette[Math.abs(h) % palette.length];
+}
+
+function hexToRgb(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r},${g},${b}`;
+}
+
+/** Draws `img` on an off-screen canvas and returns the dominant non-white,
+ *  non-black colour as `"R,G,B"`, or `""` on any failure (including CORS). */
+function extractDominantColor(img: HTMLImageElement): string {
+  try {
+    const S = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = S;
+    canvas.height = S;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.drawImage(img, 0, 0, S, S);
+    const { data } = ctx.getImageData(0, 0, S, S);
+    const counts: Record<string, number> = {};
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+      if (a < 128) continue;
+      if (r > 220 && g > 220 && b > 220) continue; // near-white
+      if (r < 30  && g < 30  && b < 30 ) continue; // near-black
+      const key = `${Math.round(r / 32) * 32},${Math.round(g / 32) * 32},${Math.round(b / 32) * 32}`;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    let maxCount = 0, dominant = '';
+    for (const [k, c] of Object.entries(counts)) {
+      if (c > maxCount) { maxCount = c; dominant = k; }
+    }
+    return dominant;
+  } catch {
+    return '';
+  }
+}
+
+// ── useAppIcon ────────────────────────────────────────────────────────────────
+
+function useAppIcon(appName: string): string | null {
+  const [icon, setIcon] = useState<string | null>(() => iconCache.get(appName) ?? null);
+
+  useEffect(() => {
+    if (iconCache.has(appName) || iconPending.has(appName)) return;
+    iconPending.add(appName);
+
+    invoke<string>('get_app_icon', { appName })
+      .then(dataUri => {
+        iconPending.delete(appName);
+        if (dataUri) {
+          iconCache.set(appName, dataUri);
+          setIcon(dataUri);
+        } else {
+          const domain = getFallbackDomain(appName);
+          const url = domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
+          iconCache.set(appName, url);
+          setIcon(url);
+        }
+      })
+      .catch(() => {
+        iconPending.delete(appName);
+        iconCache.set(appName, null);
+      });
+  }, [appName]);
+
+  return icon;
+}
+
+// ── AppIconImg ────────────────────────────────────────────────────────────────
+
+interface AppIconImgProps {
+  appName: string;
+  onColorReady: (appName: string, rgb: string) => void;
+}
+
+function AppIconImg({ appName, onColorReady }: AppIconImgProps) {
+  const iconSrc = useAppIcon(appName);
+  const [imgFailed, setImgFailed] = useState(false);
+  const displayName = getDisplayName(appName);
+  const avatarColor = nameToColor(appName);
+  const showAvatar = iconSrc === null || imgFailed;
+
+  // When no icon is available, seed the shadow with the avatar's palette colour
+  useEffect(() => {
+    if (showAvatar) {
+      onColorReady(appName, hexToRgb(avatarColor));
+    }
+  }, [showAvatar, avatarColor, appName, onColorReady]);
+
+  if (showAvatar) {
+    return (
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: avatarColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#fff',
+          flexShrink: 0,
+        }}
+      >
+        {displayName[0]?.toUpperCase() ?? '?'}
+      </div>
+    );
+  }
+
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2"/>
-      <line x1="8" y1="21" x2="16" y2="21"/>
-      <line x1="12" y1="17" x2="12" y2="21"/>
-    </svg>
+    <img
+      src={iconSrc!}
+      width={28}
+      height={28}
+      style={{ borderRadius: 6, objectFit: 'contain', flexShrink: 0 }}
+      alt={displayName}
+      onLoad={(e) => {
+        const rgb = extractDominantColor(e.currentTarget);
+        if (rgb) onColorReady(appName, rgb);
+      }}
+      onError={() => setImgFailed(true)}
+    />
   );
 }
+
 
 function RefreshIcon() {
   return (
@@ -37,6 +178,7 @@ export function AppUsage() {
   const [stats, setStats] = useState<AppUsageStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cardColors, setCardColors] = useState<Record<string, string>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback((d: string, isRefresh = false) => {
@@ -64,6 +206,13 @@ export function AppUsage() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [date, todayStr, fetchData]);
+
+  const handleColorReady = useCallback((appName: string, rgb: string) => {
+    setCardColors(prev => {
+      if (prev[appName] === rgb) return prev;
+      return { ...prev, [appName]: rgb };
+    });
+  }, []);
 
   const totalSecs = stats.reduce((sum, s) => sum + s.duration_secs, 0);
   const maxSecs = stats[0]?.duration_secs ?? 1;
@@ -116,8 +265,16 @@ export function AppUsage() {
           {stats.map((s, i) => {
             const pct = Math.round((s.duration_secs / maxSecs) * 100);
             const share = totalSecs > 0 ? Math.round((s.duration_secs / totalSecs) * 100) : 0;
+            const rgb = cardColors[s.app_name];
+            const accentColor = rgb ? `rgb(${rgb})` : (i === 0 ? '#22C55E' : '#334155');
+            const shadowStyle = rgb ? { boxShadow: `0 4px 24px -6px rgba(${rgb}, 0.45)` } : {};
+
             return (
-              <div key={s.app_name} className="card" style={{ padding: '14px 18px' }}>
+              <div
+                key={s.app_name}
+                className="card"
+                style={{ padding: '14px 18px', transition: 'box-shadow 0.4s ease', ...shadowStyle }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {/* Rank badge */}
@@ -136,13 +293,11 @@ export function AppUsage() {
                     }}>
                       {i + 1}
                     </span>
-                    {/* App icon */}
-                    <span style={{ color: '#64748B' }}>
-                      <AppIcon />
-                    </span>
-                    {/* App name */}
+                    {/* App icon (real icon → favicon fallback → letter avatar) */}
+                    <AppIconImg appName={s.app_name} onColorReady={handleColorReady} />
+                    {/* Human-readable app name */}
                     <span style={{ fontSize: 14, fontWeight: 500, color: '#E2E8F0' }}>
-                      {s.app_name}
+                      {getDisplayName(s.app_name)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -158,9 +313,9 @@ export function AppUsage() {
                     style={{
                       height: '100%',
                       width: `${pct}%`,
-                      background: i === 0 ? '#22C55E' : '#334155',
+                      background: accentColor,
                       borderRadius: 2,
-                      transition: 'width 0.3s ease',
+                      transition: 'width 0.3s ease, background 0.4s ease',
                     }}
                   />
                 </div>
