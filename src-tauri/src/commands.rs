@@ -30,7 +30,11 @@ pub struct Settings {
 #[tauri::command]
 pub fn get_current_status(state: State<'_, AppState>) -> Result<CurrentStatus, String> {
     let t = state.tracker.lock().unwrap();
-    let duration = (Utc::now() - t.session_start).num_seconds().max(0);
+    // session_duration_secs shows the total elapsed time of the current app
+    // session (active + idle combined) so the UI can display a running clock.
+    let duration = (Utc::now() - t.session_start).num_seconds().max(0)
+        + t.current_active_secs
+        + t.current_idle_secs;
     Ok(CurrentStatus {
         status: t.status.clone(),
         session_duration_secs: duration,
@@ -42,10 +46,10 @@ pub fn get_current_status(state: State<'_, AppState>) -> Result<CurrentStatus, S
 pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String> {
     let local_today = Local::now().format("%Y-%m-%d").to_string();
 
-    // Snapshot tracker before releasing its lock
-    let (status, session_start) = {
+    // Snapshot in-progress counters before releasing the lock.
+    let (cur_active, cur_idle, session_start) = {
         let t = state.tracker.lock().unwrap();
-        (t.status.clone(), t.session_start)
+        (t.current_active_secs, t.current_idle_secs, t.session_start)
     };
 
     let (mut prod, mut idle) = {
@@ -53,19 +57,14 @@ pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String>
         db::get_today_stats(&conn, &local_today).map_err(|e| e.to_string())?
     };
 
-    // Add the in-progress session if it started today (local)
-    let now = Utc::now();
+    // Add the in-progress session's counters if it started today (local).
     let session_local_date = session_start
         .with_timezone(&Local)
         .format("%Y-%m-%d")
         .to_string();
     if session_local_date == local_today {
-        let extra = (now - session_start).num_seconds().max(0);
-        if status == "productive" {
-            prod += extra;
-        } else {
-            idle += extra;
-        }
+        prod += cur_active;
+        idle += cur_idle;
     }
 
     Ok(TodayStats {
@@ -80,13 +79,12 @@ pub fn get_sessions_for_date(
     state: State<'_, AppState>,
     date: String,
 ) -> Result<Vec<db::Session>, String> {
-    let now = Utc::now();
     let local_today = Local::now().format("%Y-%m-%d").to_string();
 
     // Snapshot tracker
-    let (status, session_start) = {
+    let (cur_active, cur_idle, session_start) = {
         let t = state.tracker.lock().unwrap();
-        (t.status.clone(), t.session_start)
+        (t.current_active_secs, t.current_idle_secs, t.session_start)
     };
 
     let mut sessions = {
@@ -101,13 +99,16 @@ pub fn get_sessions_for_date(
             .format("%Y-%m-%d")
             .to_string();
         if session_local_date == local_today {
-            let duration = (now - session_start).num_seconds().max(0);
+            // Remove the placeholder row (if any) inserted by begin_session and
+            // replace it with a live view that has up-to-date counters.
+            sessions.retain(|s| s.end_time != "");
             sessions.push(db::Session {
                 id: -1,
-                start_time: session_start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                start_time: session_start
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
                 end_time: String::new(), // empty = in-progress
-                session_type: status,
-                duration_secs: duration,
+                active_secs: cur_active,
+                idle_secs: cur_idle,
             });
         }
     }

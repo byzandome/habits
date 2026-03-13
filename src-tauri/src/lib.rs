@@ -44,6 +44,7 @@ pub fn run() {
             let db_path = app_data_dir.join("habits.db");
             let conn = Connection::open(&db_path).expect("failed to open SQLite database");
             db::init_db(&conn).expect("failed to initialise database schema");
+            db::migrate_db(&conn).expect("failed to migrate database schema");
 
             // Load persisted settings
             let threshold_mins: u64 = db::get_setting(&conn, "idle_threshold_mins")
@@ -62,10 +63,17 @@ pub fn run() {
                 "productive"
             };
 
+            // Open the first app session in the DB.
+            let initial_session_id = db::begin_session(&conn, &now)
+                .expect("failed to create initial session");
+
             let tracker_shared = tracker::TrackerShared {
                 status: initial_status.to_string(),
                 session_start: now,
                 idle_threshold_secs: threshold_secs,
+                current_session_id: initial_session_id,
+                current_active_secs: 0,
+                current_idle_secs: 0,
             };
 
             let app_state = AppState {
@@ -153,16 +161,17 @@ pub fn run() {
             //   • tray Quit → app.exit(0)
             //   • Windows shutdown / logoff (WM_ENDSESSION)
             //   • SIGTERM / SIGBREAK / Ctrl-C
-            // Flushing here guarantees the current segment always reaches disk.
+            // Flushing here guarantees the current session always reaches disk.
             if let tauri::RunEvent::Exit = event {
                 let now = Utc::now();
                 let state = app_handle.state::<AppState>();
-                let (start, stype) = {
+                let (session_id, active_secs, idle_secs) = {
                     let t = state.tracker.lock().unwrap();
-                    (t.session_start, t.status.clone())
+                    (t.current_session_id, t.current_active_secs, t.current_idle_secs)
                 };
                 if let Ok(conn) = state.db.lock() {
-                    let _ = db::insert_session(&conn, &start, &now, &stype);
+                    let _ = db::update_session_time(&conn, session_id, active_secs, idle_secs);
+                    let _ = db::end_session(&conn, session_id, &now);
                 };
             }
         });

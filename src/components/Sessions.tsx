@@ -58,37 +58,44 @@ export function Sessions() {
       ) : (
         <div className="session-list">
           {sessions.map((s, i) => {
-            const isProductive = s.session_type === 'productive';
             const ongoing = s.end_time === '';
+            const totalSecs = s.active_secs + s.idle_secs;
             return (
               <div key={s.id === -1 ? `inprogress-${i}` : s.id} className="card session-row">
                 <div
                   className="session-type-bar"
-                  style={{ background: isProductive ? '#22C55E' : '#334155' }}
+                  style={{ background: '#3B82F6' }}
                 />
                 <div className="session-content">
                   <div className="session-time-range">
                     {formatTime(s.start_time)}
                     <span style={{ color: '#475569', margin: '0 6px' }}>→</span>
                     {ongoing ? (
-                      <span style={{ color: '#22C55E', fontSize: 12 }}>Ongoing</span>
+                      <span style={{ color: '#3B82F6', fontSize: 12 }}>Ongoing</span>
                     ) : (
                       formatTime(s.end_time)
+                    )}
+                    {totalSecs > 0 && (
+                      <span style={{ color: '#64748B', fontSize: 12, marginLeft: 8 }}>
+                        ({formatDuration(totalSecs)})
+                      </span>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
                     <span
                       className="type-badge"
-                      style={{
-                        background: isProductive ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)',
-                        color: isProductive ? '#22C55E' : '#64748B',
-                      }}
+                      style={{ background: 'rgba(34,197,94,0.12)', color: '#22C55E' }}
                     >
-                      {isProductive ? 'Productive' : 'Idle'}
+                      Active: {formatDuration(s.active_secs)}
                     </span>
-                    <span style={{ color: '#64748B', fontSize: 13 }}>
-                      {formatDuration(s.duration_secs)}
-                    </span>
+                    {s.idle_secs > 0 && (
+                      <span
+                        className="type-badge"
+                        style={{ background: 'rgba(100,116,139,0.12)', color: '#64748B' }}
+                      >
+                        Idle: {formatDuration(s.idle_secs)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

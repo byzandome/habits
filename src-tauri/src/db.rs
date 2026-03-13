@@ -4,13 +4,16 @@ use serde::Serialize;
 
 // ── Data types ──────────────────────────────────────────────────────────────
 
+/// One app session: from when the tracker starts (or resumes after suspend) to
+/// when it stops (app quit / shutdown / suspend).  Idle time within the session
+/// is accumulated in `idle_secs`; active (non-idle) time in `active_secs`.
 #[derive(Debug, Serialize, Clone)]
 pub struct Session {
     pub id: i64,
-    pub start_time: String,
-    pub end_time: String,        // empty string = in-progress
-    pub session_type: String,    // "productive" | "idle"
-    pub duration_secs: i64,
+    pub start_time: String,   // ISO 8601 UTC
+    pub end_time: String,     // ISO 8601 UTC, empty string = in-progress
+    pub active_secs: i64,
+    pub idle_secs: i64,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -31,10 +34,11 @@ pub struct AppUsageStat {
 pub fn init_db(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sessions (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            start_time   TEXT NOT NULL,
-            end_time     TEXT,
-            session_type TEXT NOT NULL
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time  TEXT NOT NULL,
+            end_time    TEXT,
+            active_secs INTEGER NOT NULL DEFAULT 0,
+            idle_secs   INTEGER NOT NULL DEFAULT 0
          );
          CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
@@ -51,69 +55,96 @@ pub fn init_db(conn: &Connection) -> Result<()> {
     )
 }
 
+/// Migrate an existing DB that still uses the old `session_type` schema.
+/// Drops and recreates the sessions table; historical segment data is lost but
+/// the project is still in early development so this is acceptable.
+pub fn migrate_db(conn: &Connection) -> Result<()> {
+    // Look for the `active_secs` column via PRAGMA.  If it isn't there the
+    // table is either absent or uses the old schema — recreate it.
+    let has_new_schema: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(sessions)")?;
+        let mut rows = stmt.query([])?;
+        let mut found = false;
+        while let Some(row) = rows.next()? {
+            let col_name: String = row.get(1)?; // column index 1 = name
+            if col_name == "active_secs" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+
+    if !has_new_schema {
+        conn.execute_batch(
+            "DROP TABLE IF EXISTS sessions;
+             CREATE TABLE sessions (
+                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                 start_time  TEXT NOT NULL,
+                 end_time    TEXT,
+                 active_secs INTEGER NOT NULL DEFAULT 0,
+                 idle_secs   INTEGER NOT NULL DEFAULT 0
+             );",
+        )?;
+    }
+    Ok(())
+}
+
 // ── Session CRUD ──────────────────────────────────────────────────────────────
 
-/// Insert a completed session. Skips sessions shorter than 5 seconds.
-pub fn insert_session(
-    conn: &Connection,
-    start: &DateTime<Utc>,
-    end: &DateTime<Utc>,
-    session_type: &str,
-) -> Result<()> {
-    if (*end - *start).num_seconds() < 5 {
-        return Ok(());
-    }
+/// Opens a new in-progress session and returns its DB row id.
+pub fn begin_session(conn: &Connection, start: &DateTime<Utc>) -> Result<i64> {
     conn.execute(
-        "INSERT INTO sessions (start_time, end_time, session_type) VALUES (?1, ?2, ?3)",
-        params![
-            start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-            end.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-            session_type,
-        ],
+        "INSERT INTO sessions (start_time, active_secs, idle_secs) VALUES (?1, 0, 0)",
+        params![start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// Persists the accumulated active/idle counters for the in-progress session.
+pub fn update_session_time(
+    conn: &Connection,
+    id: i64,
+    active_secs: i64,
+    idle_secs: i64,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE sessions SET active_secs = ?1, idle_secs = ?2 WHERE id = ?3",
+        params![active_secs, idle_secs, id],
+    )?;
+    Ok(())
+}
+
+/// Closes an in-progress session by setting its end_time.
+pub fn end_session(conn: &Connection, id: i64, end: &DateTime<Utc>) -> Result<()> {
+    conn.execute(
+        "UPDATE sessions SET end_time = ?1 WHERE id = ?2",
+        params![end.to_rfc3339_opts(chrono::SecondsFormat::Secs, true), id],
     )?;
     Ok(())
 }
 
 // ── Query helpers ─────────────────────────────────────────────────────────────
 
-/// Returns (productive_secs, idle_secs) for a given local date string "YYYY-MM-DD".
-/// Durations are computed from completed sessions only.
+/// Returns (active_secs, idle_secs) for completed sessions on a given local
+/// date "YYYY-MM-DD".  The caller is responsible for adding the in-progress
+/// session's counters on top.
 pub fn get_today_stats(conn: &Connection, local_today: &str) -> Result<(i64, i64)> {
-    let prod: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(
-             CAST(strftime('%s', end_time) AS INTEGER)
-             - CAST(strftime('%s', start_time) AS INTEGER)
-         ), 0)
+    let row: (i64, i64) = conn.query_row(
+        "SELECT COALESCE(SUM(active_secs), 0), COALESCE(SUM(idle_secs), 0)
          FROM sessions
-         WHERE session_type = 'productive'
-           AND date(datetime(start_time, 'localtime')) = ?1
+         WHERE date(datetime(start_time, 'localtime')) = ?1
            AND end_time IS NOT NULL",
         params![local_today],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
-
-    let idle: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(
-             CAST(strftime('%s', end_time) AS INTEGER)
-             - CAST(strftime('%s', start_time) AS INTEGER)
-         ), 0)
-         FROM sessions
-         WHERE session_type = 'idle'
-           AND date(datetime(start_time, 'localtime')) = ?1
-           AND end_time IS NOT NULL",
-        params![local_today],
-        |row| row.get(0),
-    )?;
-
-    Ok((prod, idle))
+    Ok(row)
 }
 
-/// Returns all completed sessions for a given local date string "YYYY-MM-DD".
+/// Returns all completed sessions for a given local date "YYYY-MM-DD".
 pub fn get_sessions_for_date(conn: &Connection, local_date: &str) -> Result<Vec<Session>> {
     let mut stmt = conn.prepare(
-        "SELECT id, start_time, end_time, session_type,
-                CAST(strftime('%s', end_time) AS INTEGER)
-                - CAST(strftime('%s', start_time) AS INTEGER) AS duration_secs
+        "SELECT id, start_time, end_time, active_secs, idle_secs
          FROM sessions
          WHERE date(datetime(start_time, 'localtime')) = ?1
          ORDER BY start_time ASC",
@@ -124,8 +155,8 @@ pub fn get_sessions_for_date(conn: &Connection, local_date: &str) -> Result<Vec<
             id: row.get(0)?,
             start_time: row.get(1)?,
             end_time: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-            session_type: row.get(3)?,
-            duration_secs: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+            active_secs: row.get(3)?,
+            idle_secs: row.get(4)?,
         })
     })?;
 
@@ -139,14 +170,8 @@ pub fn get_history(conn: &Connection, days: u32) -> Result<Vec<DailySummary>> {
     let mut stmt = conn.prepare(
         "SELECT
              date(datetime(start_time, 'localtime')) AS day,
-             COALESCE(SUM(CASE WHEN session_type = 'productive'
-                 THEN CAST(strftime('%s', end_time) AS INTEGER)
-                      - CAST(strftime('%s', start_time) AS INTEGER)
-                 ELSE 0 END), 0) AS prod_secs,
-             COALESCE(SUM(CASE WHEN session_type = 'idle'
-                 THEN CAST(strftime('%s', end_time) AS INTEGER)
-                      - CAST(strftime('%s', start_time) AS INTEGER)
-                 ELSE 0 END), 0) AS idle_secs
+             COALESCE(SUM(active_secs), 0) AS prod_secs,
+             COALESCE(SUM(idle_secs),   0) AS idle_secs
          FROM sessions
          WHERE end_time IS NOT NULL
            AND date(datetime(start_time, 'localtime'))

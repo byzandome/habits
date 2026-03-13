@@ -14,8 +14,8 @@ export interface Session {
   id: number;
   start_time: string;   // ISO 8601 UTC
   end_time: string;     // ISO 8601 UTC, empty string = in-progress
-  session_type: 'productive' | 'idle';
-  duration_secs: number;
+  active_secs: number;
+  idle_secs: number;
 }
 
 export interface DailySummary {
