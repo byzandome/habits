@@ -20,15 +20,76 @@ pub struct TrackerShared {
 /// 10 × 30 s = 5 minutes — limits data loss if the process is killed.
 const CHECKPOINT_POLLS: u32 = 10;
 
+/// Real-time gap between polls (seconds) that indicates the system was
+/// suspended (sleep / hibernate / deep-idle).  60 s = 2× the poll interval,
+/// so normal timer jitter will never trigger a false positive.
+const SUSPEND_GAP_SECS: i64 = 60;
+
 /// Polls every 30 seconds, transitions between productive / idle states, and
 /// writes **checkpoint segments** every 5 minutes so data is reliably stored
 /// even when the user stays in the same state for a long time or the app is
 /// killed between transitions.
+///
+/// # Sleep / lock handling
+/// When the computer is suspended (sleep, hibernate) or the screen is locked
+/// long enough, the missing wall-clock time is recorded as `"idle"` so it is
+/// never counted as productive time:
+/// - **Screen lock**: `GetLastInputInfo` accumulates idle time normally while
+///   the screen is locked, so the regular idle-threshold logic already handles
+///   this case.
+/// - **Sleep / suspend**: the tokio timer and `GetTickCount` both pause during
+///   suspension, so the elapsed wall-clock time would otherwise be silently
+///   lost.  We detect this by comparing successive `Utc::now()` values; when
+///   the real gap exceeds `SUSPEND_GAP_SECS` we flush the pre-suspend segment
+///   and write the entire gap as an `"idle"` segment.
 pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerShared>>) {
     let mut poll_count: u32 = 0;
+    // Wall-clock timestamp of the previous poll, used to detect system suspend.
+    let mut last_poll_wall = Utc::now();
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+        let now = Utc::now();
+        let actual_gap_secs = (now - last_poll_wall).num_seconds();
+        last_poll_wall = now;
+
+        // ── Suspend / sleep / hibernate detection ────────────────────────────
+        // If the real-time gap between polls is much larger than 30 s the
+        // system was suspended.  Flush whatever was in progress and record the
+        // entire gap as idle so it is never attributed to productive time.
+        if actual_gap_secs > SUSPEND_GAP_SECS {
+            let sleep_start = now - chrono::Duration::seconds(actual_gap_secs);
+
+            let segments: Vec<(DateTime<Utc>, DateTime<Utc>, String)> = {
+                let mut t = tracker.lock().unwrap();
+                let mut segs = Vec::new();
+
+                // Flush the segment that was in progress before suspension.
+                if sleep_start > t.session_start {
+                    segs.push((t.session_start, sleep_start, t.status.clone()));
+                }
+
+                // The suspension window itself is non-productive time.
+                segs.push((sleep_start, now, "idle".to_string()));
+
+                // Resume in idle state; user input will trigger the → productive
+                // transition on the next poll.
+                t.session_start = now;
+                t.status = "idle".to_string();
+                poll_count = 0;
+                segs
+            };
+
+            if let Ok(conn) = db.lock() {
+                for (start, end, stype) in segments {
+                    let _ = crate::db::insert_session(&conn, &start, &end, &stype);
+                }
+            }
+
+            continue; // skip the normal idle-detection logic this poll
+        }
+
         poll_count += 1;
 
         let idle_secs = crate::idle::get_idle_seconds();
