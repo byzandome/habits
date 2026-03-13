@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { api } from '../api';
 import type { AppUsageStat } from '../types';
@@ -21,19 +21,49 @@ function AppIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+  );
+}
+
 export function AppUsage() {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const [date, setDate] = useState(todayStr);
   const [stats, setStats] = useState<AppUsageStat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    api.getAppUsage(date).then((data) => {
+  const fetchData = useCallback((d: string, isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    api.getAppUsage(d).then((data) => {
       setStats(data);
       setLoading(false);
+      setRefreshing(false);
     });
-  }, [date]);
+  }, []);
+
+  useEffect(() => {
+    fetchData(date);
+  }, [date, fetchData]);
+
+  // Auto-refresh every 5 min, only when viewing today
+  useEffect(() => {
+    if (date !== todayStr) return;
+    intervalRef.current = setInterval(() => fetchData(date, true), 5 * 60 * 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [date, todayStr, fetchData]);
 
   const totalSecs = stats.reduce((sum, s) => sum + s.duration_secs, 0);
   const maxSecs = stats[0]?.duration_secs ?? 1;
@@ -45,13 +75,23 @@ export function AppUsage() {
           <h1 className="page-title">App Usage</h1>
           <p className="page-subtitle">Productive time per application</p>
         </div>
-        <input
-          type="date"
-          className="date-input"
-          value={date}
-          max={todayStr}
-          onChange={(e) => setDate(e.target.value)}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className={`refresh-btn${refreshing || loading ? ' refresh-btn--spinning' : ''}`}
+            onClick={() => fetchData(date, true)}
+            disabled={loading || refreshing}
+            title="Refresh"
+          >
+            <RefreshIcon />
+          </button>
+          <input
+            type="date"
+            className="date-input"
+            value={date}
+            max={todayStr}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Summary card */}
