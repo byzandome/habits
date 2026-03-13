@@ -30,4 +30,20 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    // Target modern Chromium (WebView2) — outputs smaller, faster ES2020 code
+    target: "es2020",
+    // Raise Rollup's warning threshold — our vendor chunks are intentionally large
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Split stable vendor libs into separate cacheable chunks
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+          "charts": ["recharts"],
+          "utils": ["date-fns"],
+        },
+      },
+    },
+  },
 }));

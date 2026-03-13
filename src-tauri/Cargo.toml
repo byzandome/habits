@@ -32,3 +32,10 @@ base64 = "0.22"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "sysinfoapi", "processthreadsapi", "winbase", "handleapi", "winnt", "shellapi", "wingdi"] }
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+

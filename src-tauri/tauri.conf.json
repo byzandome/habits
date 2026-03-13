@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "habits",
+  "productName": "Habits",
   "version": "0.1.0",
   "identifier": "com.zandome.habits",
   "build": {
@@ -26,13 +26,32 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": "nsis",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Zandome",
+    "copyright": "Copyright © 2026 Zandome. All rights reserved.",
+    "category": "Utility",
+    "shortDescription": "Track your daily habits and build consistency.",
+    "longDescription": "Habits is a desktop productivity app that helps you define, track, and analyze your daily habits. Monitor streaks, review history, and stay on top of your goals — all in a clean, focused interface.",
+    "license": "MIT",
+    "licenseFile": "../LICENSE.txt",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "displayLanguageSelector": false,
+        "languages": ["English"],
+        "installMode": "both",
+        "startMenuFolder": "Zandome",
+        "compression": "lzma"
+      }
+    }
   }
 }
