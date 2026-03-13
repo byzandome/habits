@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "habits",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "Habits",
+        "width": 1100,
+        "height": 750,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {
