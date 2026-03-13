@@ -20,6 +20,12 @@ pub struct DailySummary {
     pub idle_secs: i64,
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct AppUsageStat {
+    pub app_name: String,
+    pub duration_secs: i64,
+}
+
 // ── Schema init ──────────────────────────────────────────────────────────────
 
 pub fn init_db(conn: &Connection) -> Result<()> {
@@ -33,6 +39,12 @@ pub fn init_db(conn: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS app_usage (
+            app_name      TEXT NOT NULL,
+            date          TEXT NOT NULL,
+            duration_secs INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (app_name, date)
          );
          INSERT OR IGNORE INTO settings (key, value) VALUES ('idle_threshold_mins', '5');
          INSERT OR IGNORE INTO settings (key, value) VALUES ('autostart', 'false');",
@@ -148,6 +160,43 @@ pub fn get_history(conn: &Connection, days: u32) -> Result<Vec<DailySummary>> {
             date: row.get(0)?,
             productive_secs: row.get(1)?,
             idle_secs: row.get(2)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+// ── App usage ─────────────────────────────────────────────────────────────────
+
+/// Adds `duration_secs` to the running total for (app_name, date).
+/// Creates the row if it does not yet exist.
+pub fn upsert_app_usage(
+    conn: &Connection,
+    app_name: &str,
+    date: &str,
+    duration_secs: i64,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO app_usage (app_name, date, duration_secs) VALUES (?1, ?2, ?3)
+         ON CONFLICT(app_name, date) DO UPDATE SET duration_secs = duration_secs + ?3",
+        params![app_name, date, duration_secs],
+    )?;
+    Ok(())
+}
+
+/// Returns all apps with accumulated time for a given local date, sorted by
+/// duration descending.
+pub fn get_app_usage_for_date(conn: &Connection, date: &str) -> Result<Vec<AppUsageStat>> {
+    let mut stmt = conn.prepare(
+        "SELECT app_name, duration_secs FROM app_usage
+         WHERE date = ?1
+         ORDER BY duration_secs DESC",
+    )?;
+
+    let rows = stmt.query_map(params![date], |row| {
+        Ok(AppUsageStat {
+            app_name: row.get(0)?,
+            duration_secs: row.get(1)?,
         })
     })?;
 

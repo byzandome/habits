@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod idle;
 mod tracker;
+mod active_app;
 
 use std::sync::{Arc, Mutex};
 
@@ -141,6 +142,7 @@ pub fn run() {
             commands::get_history,
             commands::get_settings,
             commands::set_settings,
+            commands::get_app_usage,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

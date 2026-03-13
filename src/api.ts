@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { CurrentStatus, TodayStats, Session, DailySummary, Settings } from './types';
+import type { CurrentStatus, TodayStats, Session, DailySummary, Settings, AppUsageStat } from './types';
 
 export const api = {
   getCurrentStatus: () =>
@@ -19,4 +19,7 @@ export const api = {
 
   setSettings: (settings: { idle_threshold_mins: number; autostart: boolean }) =>
     invoke<void>('set_settings', settings),
+
+  getAppUsage: (date: string) =>
+    invoke<AppUsageStat[]>('get_app_usage', { date }),
 };

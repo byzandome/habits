@@ -147,6 +147,16 @@ pub fn get_settings(
     })
 }
 
+/// Returns per-app productive time for a given local date "YYYY-MM-DD".
+#[tauri::command]
+pub fn get_app_usage(
+    state: State<'_, AppState>,
+    date: String,
+) -> Result<Vec<db::AppUsageStat>, String> {
+    let conn = state.db.lock().unwrap();
+    db::get_app_usage_for_date(&conn, &date).map_err(|e| e.to_string())
+}
+
 /// Persists settings and applies them immediately.
 #[tauri::command]
 pub fn set_settings(

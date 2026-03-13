@@ -28,3 +28,8 @@ export interface Settings {
   idle_threshold_mins: number;
   autostart: boolean;
 }
+
+export interface AppUsageStat {
+  app_name: string;
+  duration_secs: number;
+}

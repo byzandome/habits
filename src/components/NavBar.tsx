@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import type { TrackerState } from '../hooks/useTracker';
 
-type Tab = 'dashboard' | 'history' | 'sessions' | 'settings';
+type Tab = 'dashboard' | 'history' | 'sessions' | 'apps' | 'settings';
 
 interface Props {
   activeTab: Tab;
@@ -38,6 +38,17 @@ const NAV: { tab: Tab; label: string; icon: ReactElement }[] = [
         <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
         <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
         <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+    ),
+  },
+  {
+    tab: 'apps',
+    label: 'App Usage',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <line x1="8" y1="21" x2="16" y2="21"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
       </svg>
     ),
   },

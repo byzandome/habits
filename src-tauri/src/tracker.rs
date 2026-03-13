@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use rusqlite::Connection;
 
 // ── Shared tracker state ──────────────────────────────────────────────────────
@@ -46,6 +46,8 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
     let mut poll_count: u32 = 0;
     // Wall-clock timestamp of the previous poll, used to detect system suspend.
     let mut last_poll_wall = Utc::now();
+    // Timestamp of the last app-usage sample (reset on suspend).
+    let mut last_app_tick = Utc::now();
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(30)).await;
@@ -87,6 +89,7 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
                 }
             }
 
+            last_app_tick = now;
             continue; // skip the normal idle-detection logic this poll
         }
 
@@ -134,6 +137,30 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
             if let Ok(conn) = db.lock() {
                 let _ = crate::db::insert_session(&conn, &start, &end, &stype);
             }
+        }
+
+        // ── App usage tracking ────────────────────────────────────────────────
+        // Sample the foreground app every poll cycle while the user is productive.
+        // Cap elapsed at 60 s to guard against any unexpected timer drift.
+        {
+            let current_status = {
+                let t = tracker.lock().unwrap();
+                t.status.clone()
+            };
+            if current_status == "productive" {
+                let elapsed = (now - last_app_tick).num_seconds().max(0).min(60);
+                if elapsed > 0 {
+                    let app_name = crate::active_app::get_active_app();
+                    let local_date = now
+                        .with_timezone(&Local)
+                        .format("%Y-%m-%d")
+                        .to_string();
+                    if let Ok(conn) = db.lock() {
+                        let _ = crate::db::upsert_app_usage(&conn, &app_name, &local_date, elapsed);
+                    }
+                }
+            }
+            last_app_tick = now;
         }
     }
 }
