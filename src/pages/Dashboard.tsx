@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 
 import { StatusBadge } from '../components/StatusBadge';
 import { TimeRing } from '../components/TimeRing';
-import { useTrackerContext } from '../context/tracker';
+import { useTrackerStore } from '../store/tracker';
 
 function formatHM(secs: number): string {
   const h = Math.floor(secs / 3600);
@@ -22,7 +22,7 @@ function formatCurrentSession(secs: number): string {
 }
 
 export function Dashboard() {
-  const tracker = useTrackerContext();
+  const tracker = useTrackerStore();
   const today = format(new Date(), 'EEEE, MMMM d');
 
   const statCards = [

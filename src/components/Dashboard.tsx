@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 
-import { useTrackerContext } from '../context/tracker';
+import { useTrackerStore } from '../store/tracker';
 import { StatusBadge } from './StatusBadge';
 import { TimeRing } from './TimeRing';
 
@@ -22,7 +22,7 @@ function formatCurrentSession(secs: number): string {
 }
 
 export function Dashboard() {
-  const tracker = useTrackerContext();
+  const tracker = useTrackerStore();
   const today = format(new Date(), 'EEEE, MMMM d');
 
   const statCards = [

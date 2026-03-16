@@ -1,17 +1,24 @@
+import { useEffect } from 'react';
+
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 
 import { NavBar } from '../components/NavBar';
-import { TrackerProvider } from '../context/tracker';
-import { useTracker } from '../hooks/useTracker';
+import { useTrackerStore } from '../store/tracker';
 
 export const Route = createRootRoute({ component: RootComponent });
 
 function RootComponent() {
-  const tracker = useTracker();
+  const init = useTrackerStore((s) => s.init);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    init().then((fn) => { cleanup = fn; });
+    return () => { cleanup?.(); };
+  }, [init]);
 
   return (
-    <TrackerProvider value={tracker}>
+    <>
       <div className="app-shell">
         <NavBar />
         <main className="content-area">
@@ -19,6 +26,6 @@ function RootComponent() {
         </main>
       </div>
       {import.meta.env.DEV && <TanStackRouterDevtools />}
-    </TrackerProvider>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 
 import { Link } from '@tanstack/react-router';
 
-import { useTrackerContext } from '../context/tracker';
+import { useTrackerStore } from '../store/tracker';
 
 const NAV: { to: string; label: string; icon: ReactElement }[] = [
   {
@@ -120,7 +120,7 @@ function formatShort(secs: number): string {
 }
 
 export function NavBar() {
-  const tracker = useTrackerContext();
+  const tracker = useTrackerStore();
   const isProductive = tracker.status === 'productive';
 
   return (
