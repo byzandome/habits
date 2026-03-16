@@ -106,7 +106,7 @@ export function NavBar({ activeTab, onTabChange, tracker }: Props) {
       <div className="sidebar-footer">
         <div className={`status-chip ${isProductive ? 'status-chip--productive' : 'status-chip--idle'}`}>
           <span className={`status-dot ${isProductive ? 'status-dot--productive' : ''}`} />
-          <div>
+          <div className='flex justify-between items-center w-full'>
             <div className="status-label">{isProductive ? 'Productive' : 'Idle'}</div>
             <div className="status-time">{formatShort(tracker.sessionDurationSecs)}</div>
           </div>
