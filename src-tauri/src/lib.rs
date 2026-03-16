@@ -4,6 +4,7 @@ mod db;
 mod idle;
 mod tracker;
 mod active_app;
+mod tray_icon;
 
 use std::sync::{Arc, Mutex};
 
@@ -88,7 +89,7 @@ pub fn run() {
             app.manage(app_state);
 
             // ── Background tracking task ──────────────────────────────────────
-            tauri::async_runtime::spawn(tracker::run_tracker(bg_db, bg_tracker));
+            tauri::async_runtime::spawn(tracker::run_tracker(bg_db, bg_tracker, app.handle().clone()));
 
             // ── System tray ───────────────────────────────────────────────────
             let show_item =
@@ -98,8 +99,13 @@ pub fn run() {
                 MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &sep, &quit_item])?;
 
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+            let initial_tray_icon = if initial_status == "productive" {
+                tray_icon::productive_icon()
+            } else {
+                tray_icon::idle_icon()
+            };
+            let _tray = TrayIconBuilder::with_id("main-tray")
+                .icon(initial_tray_icon)
                 .tooltip("Habits – Productivity Tracker")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {

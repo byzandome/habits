@@ -50,7 +50,18 @@ const MAX_ELAPSED_SECS: i64 = 60;
 /// `SUSPEND_GAP_SECS` we know the system was suspended.  We close the
 /// pre-suspend session and immediately open a fresh one, so the suspension
 /// period is never silently attributed to either active or idle time.
-pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerShared>>) {
+fn update_tray_icon(app_handle: &tauri::AppHandle, status: &str) {
+    let icon = if status == "productive" {
+        crate::tray_icon::productive_icon()
+    } else {
+        crate::tray_icon::idle_icon()
+    };
+    if let Some(tray) = app_handle.tray_by_id("main-tray") {
+        let _ = tray.set_icon(Some(icon));
+    }
+}
+
+pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerShared>>, app_handle: tauri::AppHandle) {
     let mut poll_count: u32 = 0;
     let mut last_poll_wall = Utc::now();
     let mut last_app_tick = Utc::now();
@@ -91,6 +102,7 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
                 poll_count = 0;
             }
 
+            update_tray_icon(&app_handle, "idle");
             last_app_tick = now;
             continue; // skip normal idle-detection this poll
         }
@@ -104,8 +116,9 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
         let elapsed = actual_gap_secs.max(0).min(MAX_ELAPSED_SECS);
 
         // ── Accumulate time & detect productive ↔ idle transition ─────────────
-        {
+        let new_status: Option<String> = {
             let mut t = tracker.lock().unwrap();
+            let prev_status = t.status.clone();
             let threshold = t.idle_threshold_secs;
 
             if t.status == "productive" && idle_secs_system >= threshold {
@@ -146,6 +159,11 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
                 }
                 poll_count = 0;
             }
+
+            if t.status != prev_status { Some(t.status.clone()) } else { None }
+        };
+        if let Some(status) = new_status {
+            update_tray_icon(&app_handle, &status);
         }
 
         // ── App usage tracking ────────────────────────────────────────────────
