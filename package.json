@@ -13,6 +13,12 @@
     "fmt:check": "oxfmt --check",
     "tauri": "tauri"
   },
+  "readme": "https://github.com/byzandome/habits/readme",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/byzandome/habits",
+    "type": "git"
+  },
   "author": {
     "email": "miguel@zandome.dev",
     "name": "Miguel Mendoza",
