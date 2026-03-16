@@ -110,6 +110,7 @@ pub fn get_sessions_for_date(
                 active_secs: cur_active,
                 idle_secs: cur_idle,
             });
+            sessions.sort_by(|a, b| b.start_time.cmp(&a.start_time)); // newest first
         }
     }
 
