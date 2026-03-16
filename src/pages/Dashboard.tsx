@@ -1,8 +1,8 @@
 import { format } from 'date-fns';
 
+import { StatusBadge } from '../components/StatusBadge';
+import { TimeRing } from '../components/TimeRing';
 import { useTrackerContext } from '../context/tracker';
-import { StatusBadge } from './StatusBadge';
-import { TimeRing } from './TimeRing';
 
 function formatHM(secs: number): string {
   const h = Math.floor(secs / 3600);

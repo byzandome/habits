@@ -1,17 +1,12 @@
-import type { TrackerState } from '../hooks/useTracker';
 import type { ReactElement } from 'react';
 
-type Tab = 'dashboard' | 'history' | 'sessions' | 'apps' | 'settings';
+import { Link } from '@tanstack/react-router';
 
-interface Props {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
-  tracker: TrackerState;
-}
+import { useTrackerContext } from '../context/tracker';
 
-const NAV: { tab: Tab; label: string; icon: ReactElement }[] = [
+const NAV: { to: string; label: string; icon: ReactElement }[] = [
   {
-    tab: 'dashboard',
+    to: '/',
     label: 'Dashboard',
     icon: (
       <svg
@@ -32,7 +27,7 @@ const NAV: { tab: Tab; label: string; icon: ReactElement }[] = [
     ),
   },
   {
-    tab: 'history',
+    to: '/history',
     label: 'History',
     icon: (
       <svg
@@ -52,7 +47,7 @@ const NAV: { tab: Tab; label: string; icon: ReactElement }[] = [
     ),
   },
   {
-    tab: 'sessions',
+    to: '/sessions',
     label: 'Sessions',
     icon: (
       <svg
@@ -75,7 +70,7 @@ const NAV: { tab: Tab; label: string; icon: ReactElement }[] = [
     ),
   },
   {
-    tab: 'apps',
+    to: '/apps',
     label: 'App Usage',
     icon: (
       <svg
@@ -95,7 +90,7 @@ const NAV: { tab: Tab; label: string; icon: ReactElement }[] = [
     ),
   },
   {
-    tab: 'settings',
+    to: '/settings',
     label: 'Settings',
     icon: (
       <svg
@@ -124,7 +119,8 @@ function formatShort(secs: number): string {
   return `${s}s`;
 }
 
-export function NavBar({ activeTab, onTabChange, tracker }: Props) {
+export function NavBar() {
+  const tracker = useTrackerContext();
   const isProductive = tracker.status === 'productive';
 
   return (
@@ -150,15 +146,17 @@ export function NavBar({ activeTab, onTabChange, tracker }: Props) {
 
       {/* Navigation */}
       <nav className="sidebar-nav">
-        {NAV.map(({ tab, label, icon }) => (
-          <button
-            key={tab}
-            className={`nav-item ${activeTab === tab ? 'nav-item--active' : ''}`}
-            onClick={() => onTabChange(tab)}
+        {NAV.map(({ to, label, icon }) => (
+          <Link
+            key={to}
+            to={to}
+            className="nav-item"
+            activeProps={{ className: 'nav-item nav-item--active' }}
+            activeOptions={to === '/' ? { exact: true } : undefined}
           >
             <span className="nav-icon">{icon}</span>
             <span>{label}</span>
-          </button>
+          </Link>
         ))}
       </nav>
 
