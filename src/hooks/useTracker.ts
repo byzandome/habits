@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
-import { api } from '../api';
 import type { CurrentStatus, TodayStats } from '../types';
+
+import { listen } from '@tauri-apps/api/event';
+import { useState, useEffect, useRef } from 'react';
+
+import { api } from '../api';
 
 export interface TrackerState {
   status: 'productive' | 'idle' | 'locked';
@@ -31,10 +33,7 @@ export function useTracker(): TrackerState {
 
     const poll = async () => {
       try {
-        const [status, today] = await Promise.all([
-          api.getCurrentStatus(),
-          api.getTodayStats(),
-        ]);
+        const [status, today] = await Promise.all([api.getCurrentStatus(), api.getTodayStats()]);
         setServer({ status, today });
         setDisplaySecs(status.session_duration_secs);
       } catch {

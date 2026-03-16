@@ -13,15 +13,15 @@ export interface TodayStats {
 
 export interface Session {
   id: number;
-  start_time: string;   // ISO 8601 UTC
-  end_time: string;     // ISO 8601 UTC, empty string = in-progress
+  start_time: string; // ISO 8601 UTC
+  end_time: string; // ISO 8601 UTC, empty string = in-progress
   active_secs: number;
   idle_secs: number;
   locked_secs: number;
 }
 
 export interface DailySummary {
-  date: string;         // "YYYY-MM-DD" local
+  date: string; // "YYYY-MM-DD" local
   productive_secs: number;
   idle_secs: number;
   locked_secs: number;

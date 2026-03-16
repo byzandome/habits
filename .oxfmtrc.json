@@ -2,23 +2,23 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
 
   // ── Print ────────────────────────────────────────────────────────────────
-  "printWidth": 100,        // wrap at 100 chars — readable without horizontal scroll
-  "tabWidth": 2,            // 2-space indentation (JS/TS standard)
-  "useTabs": false,         // spaces, not tabs
-  "endOfLine": "lf",        // LF everywhere (cross-platform consistency)
+  "printWidth": 100, // wrap at 100 chars — readable without horizontal scroll
+  "tabWidth": 2, // 2-space indentation (JS/TS standard)
+  "useTabs": false, // spaces, not tabs
+  "endOfLine": "lf", // LF everywhere (cross-platform consistency)
   "insertFinalNewline": true,
 
   // ── Punctuation ──────────────────────────────────────────────────────────
-  "semi": true,             // always write semicolons
-  "singleQuote": true,      // 'single' in JS/TS (matches existing code)
-  "jsxSingleQuote": false,  // "double" in JSX attributes (React/HTML convention)
-  "quoteProps": "as-needed",// never quote object keys unless required
-  "trailingComma": "all",   // trailing commas in args, params, arrays, objects
+  "semi": true, // always write semicolons
+  "singleQuote": true, // 'single' in JS/TS (matches existing code)
+  "jsxSingleQuote": false, // "double" in JSX attributes (React/HTML convention)
+  "quoteProps": "as-needed", // never quote object keys unless required
+  "trailingComma": "all", // trailing commas in args, params, arrays, objects
 
   // ── Brackets & Parens ────────────────────────────────────────────────────
-  "bracketSpacing": true,   // { a: 1 } not {a: 1}
+  "bracketSpacing": true, // { a: 1 } not {a: 1}
   "bracketSameLine": false, // JSX closing > on its own line
-  "arrowParens": "always",  // (x) => x, not x => x
+  "arrowParens": "always", // (x) => x, not x => x
 
   // ── Objects ──────────────────────────────────────────────────────────────
   "objectWrap": "collapse", // collapse short objects onto one line
@@ -44,17 +44,11 @@
   // ── Tailwind CSS ─────────────────────────────────────────────────────────
   // Sort className / class strings using the official Tailwind algorithm.
   // Also covers clsx() and cn() / cva() helper calls used in this project.
-  "sortTailwindcss": {
-    "functions": ["clsx", "cn", "cva", "tw"]
-  },
+  "sortTailwindcss": { "functions": ["clsx", "cn", "cva", "tw"] },
 
   // ── package.json ─────────────────────────────────────────────────────────
   "sortPackageJson": true,
 
   // ── Ignore ───────────────────────────────────────────────────────────────
-  "ignorePatterns": [
-    "dist/",
-    "target/",
-    "src-tauri/"
-  ]
+  "ignorePatterns": ["dist/", "target/", "src-tauri/"]
 }

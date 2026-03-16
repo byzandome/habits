@@ -21,24 +21,24 @@ Built with **Tauri 2**, **React 19**, **TypeScript**, and **Rust** (SQLite backe
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Desktop shell | Tauri 2 |
-| Frontend | React 19, TypeScript 5, Vite 7 |
-| Styling | Tailwind CSS 4 |
-| Backend | Rust (rusqlite / SQLite) |
-| Package manager | Bun |
+| Layer           | Technology                     |
+| --------------- | ------------------------------ |
+| Desktop shell   | Tauri 2                        |
+| Frontend        | React 19, TypeScript 5, Vite 7 |
+| Styling         | Tailwind CSS 4                 |
+| Backend         | Rust (rusqlite / SQLite)       |
+| Package manager | Bun                            |
 
 ---
 
 ## Prerequisites
 
-| Tool | Version |
-|------|---------|
-| [Node.js](https://nodejs.org/) | 18+ |
-| [Bun](https://bun.sh/) | latest |
-| [Rust](https://www.rust-lang.org/tools/install) | stable (via `rustup`) |
-| Tauri prerequisites | see [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/) |
+| Tool                                            | Version                                                              |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| [Node.js](https://nodejs.org/)                  | 18+                                                                  |
+| [Bun](https://bun.sh/)                          | latest                                                               |
+| [Rust](https://www.rust-lang.org/tools/install) | stable (via `rustup`)                                                |
+| Tauri prerequisites                             | see [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/) |
 
 ---
 
@@ -54,12 +54,12 @@ bun run tauri dev
 
 ### Available scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Vite dev server only (no Tauri window) |
-| `bun run build` | Type-check and build the frontend |
-| `bun run tauri dev` | Full Tauri development build with HMR |
-| `bun run tauri build` | Production desktop bundle |
+| Command               | Description                            |
+| --------------------- | -------------------------------------- |
+| `bun run dev`         | Vite dev server only (no Tauri window) |
+| `bun run build`       | Type-check and build the frontend      |
+| `bun run tauri dev`   | Full Tauri development build with HMR  |
+| `bun run tauri build` | Production desktop bundle              |
 
 ---
 

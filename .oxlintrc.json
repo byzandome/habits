@@ -15,54 +15,36 @@
     "vitest"
   ],
   // Enable whole categories; individual rules below can still override these.
-  "categories": {
-    "correctness": "error",
-    "suspicious": "warn",
-    "perf": "warn"
-  },
+  "categories": { "correctness": "error", "suspicious": "warn", "perf": "warn" },
   "rules": {
     // ── General JS best-practices ────────────────────────────────────────────
-    "no-console": "warn",          // keep code clean; remove before shipping
-    "no-eval": "error",            // security: arbitrary code execution risk
-    "no-var": "error",             // use let / const
-    "prefer-const": "error",       // signal immutability intent
+    "no-console": "warn", // keep code clean; remove before shipping
+    "no-eval": "error", // security: arbitrary code execution risk
+    "no-var": "error", // use let / const
+    "prefer-const": "error", // signal immutability intent
     "eqeqeq": ["error", "always"], // always use === / !==
 
     // ── React ────────────────────────────────────────────────────────────────
-    "react/jsx-no-target-blank": "error",  // security: target=_blank + opener
-    "react/self-closing-comp": "warn",     // <Foo /> instead of <Foo></Foo>
+    "react/jsx-no-target-blank": "error", // security: target=_blank + opener
+    "react/self-closing-comp": "warn", // <Foo /> instead of <Foo></Foo>
 
     // ── React Hooks ──────────────────────────────────────────────────────────
     "react-hooks/rules-of-hooks": "error", // hooks must follow the rules
     "react-hooks/exhaustive-deps": "warn", // deps arrays must be complete
 
     // ── TypeScript ───────────────────────────────────────────────────────────
-    "@typescript-eslint/no-explicit-any": "warn",       // avoid escaping types
+    "@typescript-eslint/no-explicit-any": "warn", // avoid escaping types
     "@typescript-eslint/no-non-null-assertion": "warn", // avoid unsafe !
 
     // ── Imports ──────────────────────────────────────────────────────────────
-    "import/no-duplicates": "error",   // merge duplicate import statements
-    "import/no-self-import": "error"   // a module cannot import itself
+    "import/no-duplicates": "error", // merge duplicate import statements
+    "import/no-self-import": "error" // a module cannot import itself
   },
   "settings": {
-    "react": {
-      "version": "19.0"
-    },
-    "jsx-a11y": {
-      "polymorphicPropName": null,
-      "components": {},
-      "attributes": {}
-    }
+    "react": { "version": "19.0" },
+    "jsx-a11y": { "polymorphicPropName": null, "components": {}, "attributes": {} }
   },
-  "env": {
-    "browser": true,
-    "es2020": true,
-    "builtin": true
-  },
+  "env": { "browser": true, "es2020": true, "builtin": true },
   "globals": {},
-  "ignorePatterns": [
-    "dist/",
-    "target/",
-    "src-tauri/"
-  ]
+  "ignorePatterns": ["dist/", "target/", "src-tauri/"]
 }

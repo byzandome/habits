@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { format, parseISO } from 'date-fns';
-import { api } from '../api';
 import type { Session } from '../types';
+
+import { format, parseISO } from 'date-fns';
+import { useEffect, useState } from 'react';
+
+import { api } from '../api';
 
 function formatTime(iso: string): string {
   if (!iso) return '—';
@@ -62,10 +64,7 @@ export function Sessions() {
             const totalSecs = s.active_secs + s.idle_secs;
             return (
               <div key={s.id === -1 ? `inprogress-${i}` : s.id} className="card session-row">
-                <div
-                  className="session-type-bar"
-                  style={{ background: '#3B82F6' }}
-                />
+                <div className="session-type-bar" style={{ background: '#3B82F6' }} />
                 <div className="session-content">
                   <div className="session-time-range">
                     {formatTime(s.start_time)}

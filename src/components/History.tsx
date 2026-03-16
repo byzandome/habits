@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from 'recharts';
-import { format, parseISO } from 'date-fns';
-import { api } from '../api';
 import type { DailySummary } from '../types';
+
+import { format, parseISO } from 'date-fns';
+import { useEffect, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+
+import { api } from '../api';
 
 function secsToHours(secs: number): number {
   return Math.round((secs / 3600) * 10) / 10;
@@ -24,20 +24,26 @@ interface TooltipPayload {
   color: string;
 }
 
-function CustomTooltip({ active, payload, label }: {
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
   active?: boolean;
   payload?: TooltipPayload[];
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      background: '#1E1E23',
-      border: '1px solid #2A2A2F',
-      borderRadius: 8,
-      padding: '10px 14px',
-      fontSize: 13,
-    }}>
+    <div
+      style={{
+        background: '#1E1E23',
+        border: '1px solid #2A2A2F',
+        borderRadius: 8,
+        padding: '10px 14px',
+        fontSize: 13,
+      }}
+    >
       <div style={{ color: '#94A3B8', marginBottom: 6, fontWeight: 600 }}>{label}</div>
       {payload.map((p) => (
         <div key={p.name} style={{ color: p.color, marginBottom: 2 }}>
@@ -128,9 +134,7 @@ export function History() {
           const pct = total > 0 ? Math.round((d.productive_secs / total) * 100) : 0;
           return (
             <div key={d.date} className="card history-row">
-              <div className="history-row-date">
-                {format(parseISO(d.date), 'EEEE, MMM d')}
-              </div>
+              <div className="history-row-date">{format(parseISO(d.date), 'EEEE, MMM d')}</div>
               <div className="history-row-stats">
                 <span style={{ color: '#22C55E' }}>{formatHM(d.productive_secs)}</span>
                 <span style={{ color: '#475569' }}>·</span>
@@ -141,19 +145,19 @@ export function History() {
                     <span style={{ color: '#F59E0B' }}>{formatHM(d.locked_secs)} locked</span>
                   </>
                 )}
-                <span className="pct-badge" style={{
-                  background: pct >= 70 ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.15)',
-                  color: pct >= 70 ? '#22C55E' : '#64748B',
-                }}>
+                <span
+                  className="pct-badge"
+                  style={{
+                    background: pct >= 70 ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.15)',
+                    color: pct >= 70 ? '#22C55E' : '#64748B',
+                  }}
+                >
                   {pct}% productive
                 </span>
               </div>
               {/* Progress bar */}
               <div className="history-progress-bg">
-                <div
-                  className="history-progress-fill"
-                  style={{ width: `${pct}%` }}
-                />
+                <div className="history-progress-fill" style={{ width: `${pct}%` }} />
               </div>
             </div>
           );

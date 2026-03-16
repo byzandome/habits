@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AppUsageStat } from '../types';
+
 import { invoke } from '@tauri-apps/api/core';
 import { format } from 'date-fns';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { api } from '../api';
 import { getDisplayName, getFallbackDomain } from '../appMeta';
-import type { AppUsageStat } from '../types';
 
 // ── Module-level icon cache (survives re-renders, cleared on page refresh) ───
 export const iconCache = new Map<string, string | null>();
@@ -22,12 +24,18 @@ function formatHM(secs: number): string {
 /** djb2 hash → one of 8 vibrant palette colours. */
 function nameToColor(name: string): string {
   const palette = [
-    '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B',
-    '#10B981', '#06B6D4', '#EF4444', '#84CC16',
+    '#3B82F6',
+    '#8B5CF6',
+    '#EC4899',
+    '#F59E0B',
+    '#10B981',
+    '#06B6D4',
+    '#EF4444',
+    '#84CC16',
   ];
   let h = 0;
   for (let i = 0; i < name.length; i++) {
-    h = ((h << 5) - h) + name.charCodeAt(i);
+    h = (h << 5) - h + name.charCodeAt(i);
     h |= 0;
   }
   return palette[Math.abs(h) % palette.length];
@@ -54,16 +62,23 @@ function extractDominantColor(img: HTMLImageElement): string {
     const { data } = ctx.getImageData(0, 0, S, S);
     const counts: Record<string, number> = {};
     for (let i = 0; i < data.length; i += 4) {
-      const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+      const r = data[i],
+        g = data[i + 1],
+        b = data[i + 2],
+        a = data[i + 3];
       if (a < 128) continue;
       if (r > 220 && g > 220 && b > 220) continue; // near-white
-      if (r < 30  && g < 30  && b < 30 ) continue; // near-black
+      if (r < 30 && g < 30 && b < 30) continue; // near-black
       const key = `${Math.round(r / 32) * 32},${Math.round(g / 32) * 32},${Math.round(b / 32) * 32}`;
       counts[key] = (counts[key] ?? 0) + 1;
     }
-    let maxCount = 0, dominant = '';
+    let maxCount = 0,
+      dominant = '';
     for (const [k, c] of Object.entries(counts)) {
-      if (c > maxCount) { maxCount = c; dominant = k; }
+      if (c > maxCount) {
+        maxCount = c;
+        dominant = k;
+      }
     }
     return dominant;
   } catch {
@@ -81,7 +96,7 @@ function useAppIcon(appName: string): string | null {
     iconPending.add(appName);
 
     invoke<string>('get_app_icon', { appName })
-      .then(dataUri => {
+      .then((dataUri) => {
         iconPending.delete(appName);
         if (dataUri) {
           iconCache.set(appName, dataUri);
@@ -161,13 +176,21 @@ function AppIconImg({ appName, onColorReady }: AppIconImgProps) {
   );
 }
 
-
 function RefreshIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10"/>
-      <polyline points="1 20 1 14 7 14"/>
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   );
 }
@@ -208,7 +231,7 @@ export function AppUsage() {
   }, [date, todayStr, fetchData]);
 
   const handleColorReady = useCallback((appName: string, rgb: string) => {
-    setCardColors(prev => {
+    setCardColors((prev) => {
       if (prev[appName] === rgb) return prev;
       return { ...prev, [appName]: rgb };
     });
@@ -245,14 +268,34 @@ export function AppUsage() {
 
       {/* Summary card */}
       {!loading && stats.length > 0 && (
-        <div className="card" style={{ padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div
+          className="card"
+          style={{
+            padding: '16px 20px',
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#22C55E"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>
             <span style={{ color: '#94A3B8', fontSize: 13 }}>Productive time tracked</span>
           </div>
-          <span style={{ color: '#22C55E', fontWeight: 600, fontSize: 15 }}>{formatHM(totalSecs)}</span>
+          <span style={{ color: '#22C55E', fontWeight: 600, fontSize: 15 }}>
+            {formatHM(totalSecs)}
+          </span>
         </div>
       )}
 
@@ -266,7 +309,7 @@ export function AppUsage() {
             const pct = Math.round((s.duration_secs / maxSecs) * 100);
             const share = totalSecs > 0 ? Math.round((s.duration_secs / totalSecs) * 100) : 0;
             const rgb = cardColors[s.app_name];
-            const accentColor = rgb ? `rgb(${rgb})` : (i === 0 ? '#22C55E' : '#334155');
+            const accentColor = rgb ? `rgb(${rgb})` : i === 0 ? '#22C55E' : '#334155';
             const shadowStyle = rgb ? { boxShadow: `0 4px 24px -6px rgba(${rgb}, 0.45)` } : {};
 
             return (
@@ -275,22 +318,31 @@ export function AppUsage() {
                 className="card"
                 style={{ padding: '14px 18px', transition: 'box-shadow 0.4s ease', ...shadowStyle }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 10,
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {/* Rank badge */}
-                    <span style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 6,
-                      background: i === 0 ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.12)',
-                      color: i === 0 ? '#22C55E' : '#64748B',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
+                    <span
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        background: i === 0 ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.12)',
+                        color: i === 0 ? '#22C55E' : '#64748B',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
                       {i + 1}
                     </span>
                     {/* App icon (real icon → favicon fallback → letter avatar) */}
@@ -301,7 +353,14 @@ export function AppUsage() {
                         {getDisplayName(s.app_name)}
                       </span>
                       {import.meta.env.DEV && s.exe_path && (
-                        <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', lineHeight: 1.3 }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: '#475569',
+                            fontFamily: 'monospace',
+                            lineHeight: 1.3,
+                          }}
+                        >
                           {s.exe_path}
                         </span>
                       )}
@@ -309,13 +368,23 @@ export function AppUsage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ color: '#64748B', fontSize: 12 }}>{share}%</span>
-                    <span style={{ color: '#F8FAFC', fontWeight: 600, fontSize: 14, minWidth: 52, textAlign: 'right' }}>
+                    <span
+                      style={{
+                        color: '#F8FAFC',
+                        fontWeight: 600,
+                        fontSize: 14,
+                        minWidth: 52,
+                        textAlign: 'right',
+                      }}
+                    >
                       {formatHM(s.duration_secs)}
                     </span>
                   </div>
                 </div>
                 {/* Progress bar */}
-                <div style={{ height: 4, background: '#1E293B', borderRadius: 2, overflow: 'hidden' }}>
+                <div
+                  style={{ height: 4, background: '#1E293B', borderRadius: 2, overflow: 'hidden' }}
+                >
                   <div
                     style={{
                       height: '100%',

@@ -1,7 +1,9 @@
-import { format } from 'date-fns';
-import { TimeRing } from './TimeRing';
-import { StatusBadge } from './StatusBadge';
 import type { TrackerState } from '../hooks/useTracker';
+
+import { format } from 'date-fns';
+
+import { StatusBadge } from './StatusBadge';
+import { TimeRing } from './TimeRing';
 
 interface Props {
   tracker: TrackerState;
@@ -34,8 +36,17 @@ export function Dashboard({ tracker }: Props) {
       color: '#22C55E',
       bg: 'rgba(34,197,94,0.08)',
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#22C55E"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
       ),
     },
@@ -45,8 +56,18 @@ export function Dashboard({ tracker }: Props) {
       color: '#64748B',
       bg: 'rgba(100,116,139,0.08)',
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#64748B"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
         </svg>
       ),
     },
@@ -56,19 +77,55 @@ export function Dashboard({ tracker }: Props) {
       color: '#F59E0B',
       bg: 'rgba(245,158,11,0.08)',
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#F59E0B"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       ),
     },
     {
       label: 'Current Session',
       value: formatCurrentSession(tracker.sessionDurationSecs),
-      color: tracker.status === 'productive' ? '#22C55E' : tracker.status === 'locked' ? '#F59E0B' : '#64748B',
-      bg: tracker.status === 'productive' ? 'rgba(34,197,94,0.08)' : tracker.status === 'locked' ? 'rgba(245,158,11,0.08)' : 'rgba(100,116,139,0.08)',
+      color:
+        tracker.status === 'productive'
+          ? '#22C55E'
+          : tracker.status === 'locked'
+            ? '#F59E0B'
+            : '#64748B',
+      bg:
+        tracker.status === 'productive'
+          ? 'rgba(34,197,94,0.08)'
+          : tracker.status === 'locked'
+            ? 'rgba(245,158,11,0.08)'
+            : 'rgba(100,116,139,0.08)',
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={tracker.status === 'productive' ? '#22C55E' : tracker.status === 'locked' ? '#F59E0B' : '#64748B'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12"/>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={
+            tracker.status === 'productive'
+              ? '#22C55E'
+              : tracker.status === 'locked'
+                ? '#F59E0B'
+                : '#64748B'
+          }
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12" />
         </svg>
       ),
     },
@@ -100,7 +157,10 @@ export function Dashboard({ tracker }: Props) {
             <span style={{ color: '#94A3B8', fontSize: 13 }}>Productive</span>
           </div>
           <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#1E293B', border: '1px solid #334155' }} />
+            <span
+              className="legend-dot"
+              style={{ background: '#1E293B', border: '1px solid #334155' }}
+            />
             <span style={{ color: '#94A3B8', fontSize: 13 }}>Idle</span>
           </div>
           <div className="legend-item">
@@ -113,12 +173,20 @@ export function Dashboard({ tracker }: Props) {
       {/* Stat cards */}
       <div className="stat-grid">
         {statCards.map((card) => (
-          <div key={card.label} className="card stat-card" style={{ '--card-accent': card.color, '--card-bg': card.bg } as React.CSSProperties}>
+          <div
+            key={card.label}
+            className="card stat-card"
+            style={{ '--card-accent': card.color, '--card-bg': card.bg } as React.CSSProperties}
+          >
             <div className="stat-card-header">
-              <span className="stat-icon" style={{ background: card.bg }}>{card.icon}</span>
+              <span className="stat-icon" style={{ background: card.bg }}>
+                {card.icon}
+              </span>
               <span className="stat-label">{card.label}</span>
             </div>
-            <div className="stat-value" style={{ color: card.color }}>{card.value}</div>
+            <div className="stat-value" style={{ color: card.color }}>
+              {card.value}
+            </div>
           </div>
         ))}
       </div>

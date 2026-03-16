@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api';
 import type { Settings } from '../types';
 
+import { useEffect, useState } from 'react';
+
+import { api } from '../api';
 // Module-level icon cache exported from AppUsage — we clear it here directly.
 // Import the Map reference so we can wipe it without re-mounting the component.
 import { iconCache } from './AppUsage';
@@ -58,7 +59,12 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  if (loading) return <div className="page"><div className="empty-state">Loading…</div></div>;
+  if (loading)
+    return (
+      <div className="page">
+        <div className="empty-state">Loading…</div>
+      </div>
+    );
 
   return (
     <div className="page">
@@ -70,7 +76,6 @@ export function Settings() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 520 }}>
-
         {/* Idle threshold */}
         <div className="card settings-card">
           <div className="settings-row">
@@ -88,7 +93,10 @@ export function Settings() {
                 max={60}
                 value={settings.idle_threshold_mins}
                 onChange={(e) =>
-                  setSettings({ ...settings, idle_threshold_mins: Math.max(1, Math.min(60, Number(e.target.value))) })
+                  setSettings({
+                    ...settings,
+                    idle_threshold_mins: Math.max(1, Math.min(60, Number(e.target.value))),
+                  })
                 }
               />
               <span style={{ color: '#64748B', fontSize: 13 }}>min</span>
@@ -103,9 +111,19 @@ export function Settings() {
               min={1}
               max={30}
               value={settings.idle_threshold_mins}
-              onChange={(e) => setSettings({ ...settings, idle_threshold_mins: Number(e.target.value) })}
+              onChange={(e) =>
+                setSettings({ ...settings, idle_threshold_mins: Number(e.target.value) })
+              }
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontSize: 11, marginTop: 4 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                color: '#475569',
+                fontSize: 11,
+                marginTop: 4,
+              }}
+            >
               <span>1 min</span>
               <span>30 min</span>
             </div>
@@ -117,9 +135,7 @@ export function Settings() {
           <div className="settings-row">
             <div>
               <div className="settings-label">Start with Windows</div>
-              <div className="settings-desc">
-                Automatically launch Habits when you log in.
-              </div>
+              <div className="settings-desc">Automatically launch Habits when you log in.</div>
             </div>
             <button
               className={`toggle-btn ${settings.autostart ? 'toggle-btn--on' : ''}`}
@@ -132,10 +148,7 @@ export function Settings() {
         </div>
 
         {/* Save */}
-        <button
-          className={`save-btn ${saved ? 'save-btn--saved' : ''}`}
-          onClick={handleSave}
-        >
+        <button className={`save-btn ${saved ? 'save-btn--saved' : ''}`} onClick={handleSave}>
           {saved ? '✓ Saved!' : 'Save Settings'}
         </button>
 
@@ -145,8 +158,8 @@ export function Settings() {
             <div>
               <div className="settings-label">Clear Icon Cache</div>
               <div className="settings-desc">
-                Forces all app icons to be re-fetched on the next visit.
-                Useful after updating an app or if icons appear broken.
+                Forces all app icons to be re-fetched on the next visit. Useful after updating an
+                app or if icons appear broken.
               </div>
             </div>
             <button
@@ -160,20 +173,29 @@ export function Settings() {
         </div>
 
         {/* Delete all data */}
-        <div className="card settings-card" style={{ borderColor: confirmDelete ? 'rgba(239,68,68,0.40)' : undefined }}>
+        <div
+          className="card settings-card"
+          style={{ borderColor: confirmDelete ? 'rgba(239,68,68,0.40)' : undefined }}
+        >
           <div className="settings-row">
             <div>
-              <div className="settings-label" style={{ color: '#F87171' }}>Delete All Data</div>
+              <div className="settings-label" style={{ color: '#F87171' }}>
+                Delete All Data
+              </div>
               <div className="settings-desc">
-                Permanently removes all sessions, app-usage history and icon
-                cache. Settings are kept. This cannot be undone.
+                Permanently removes all sessions, app-usage history and icon cache. Settings are
+                kept. This cannot be undone.
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
               {confirmDelete && (
                 <button
                   className="danger-btn"
-                  style={{ borderColor: 'rgba(100,116,139,0.30)', background: 'rgba(100,116,139,0.10)', color: '#94A3B8' }}
+                  style={{
+                    borderColor: 'rgba(100,116,139,0.30)',
+                    background: 'rgba(100,116,139,0.10)',
+                    color: '#94A3B8',
+                  }}
                   onClick={() => setConfirmDelete(false)}
                   disabled={deleting}
                 >
@@ -185,7 +207,13 @@ export function Settings() {
                 onClick={handleDeleteData}
                 disabled={deleting}
               >
-                {deleted ? '✓ Deleted' : deleting ? 'Deleting…' : confirmDelete ? 'Confirm Delete' : 'Delete All Data'}
+                {deleted
+                  ? '✓ Deleted'
+                  : deleting
+                    ? 'Deleting…'
+                    : confirmDelete
+                      ? 'Confirm Delete'
+                      : 'Delete All Data'}
               </button>
             </div>
           </div>

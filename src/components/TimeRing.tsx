@@ -26,8 +26,8 @@ export function TimeRing({ productiveSecs, idleSecs, lockedSecs }: Props) {
     total > 0
       ? [
           { name: 'Productive', value: productiveSecs, color: PRODUCTIVE_COLOR },
-          { name: 'Idle',       value: idleSecs,       color: IDLE_COLOR },
-          { name: 'Locked',     value: lockedSecs,     color: LOCKED_COLOR },
+          { name: 'Idle', value: idleSecs, color: IDLE_COLOR },
+          { name: 'Locked', value: lockedSecs, color: LOCKED_COLOR },
         ].filter((d) => d.value > 0)
       : [{ name: 'Empty', value: 1, color: EMPTY_COLOR }];
 
@@ -69,7 +69,15 @@ export function TimeRing({ productiveSecs, idleSecs, lockedSecs }: Props) {
         <div style={{ fontSize: 38, fontWeight: 700, color: '#F8FAFC', lineHeight: 1 }}>
           {formatCenter(productiveSecs)}
         </div>
-        <div style={{ fontSize: 13, color: '#64748B', marginTop: 6, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <div
+          style={{
+            fontSize: 13,
+            color: '#64748B',
+            marginTop: 6,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+          }}
+        >
           productive
         </div>
         {total > 0 && (

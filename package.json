@@ -1,7 +1,17 @@
 {
   "name": "habits",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": {
+    "name": "Miguel Mendoza",
+    "email": "miguel@zandome.dev",
+    "url": "https://zandome.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/byzandome/habits"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,17 +22,6 @@
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "tauri": "tauri"
-  },
-  "readme": "https://github.com/byzandome/habits/readme",
-  "license": "MIT",
-  "repository": {
-    "url": "https://github.com/byzandome/habits",
-    "type": "git"
-  },
-  "author": {
-    "email": "miguel@zandome.dev",
-    "name": "Miguel Mendoza",
-    "url": "https://zandome.dev"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
@@ -53,5 +52,6 @@
     "oxlint": "^1.56.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
-  }
+  },
+  "readme": "https://github.com/byzandome/habits/readme"
 }

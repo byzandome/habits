@@ -1,6 +1,6 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from '@tailwindcss/vite'
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -13,36 +13,30 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  
+
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
     host: host || false,
-    hmr: host
-      ? {
-        protocol: "ws",
-        host,
-        port: 1421,
-      }
-      : undefined,
+    hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: ['**/src-tauri/**'],
     },
   },
   build: {
     // Target modern Chromium (WebView2) — outputs smaller, faster ES2020 code
-    target: "es2020",
+    target: 'es2020',
     // Raise Rollup's warning threshold — our vendor chunks are intentionally large
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         // Split stable vendor libs into separate cacheable chunks
         manualChunks: {
-          "react-vendor": ["react", "react-dom"],
-          "charts": ["recharts"],
-          "utils": ["date-fns"],
+          'react-vendor': ['react', 'react-dom'],
+          charts: ['recharts'],
+          utils: ['date-fns'],
         },
       },
     },

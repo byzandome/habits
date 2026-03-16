@@ -19,14 +19,16 @@ export function StatusBadge({ status, sessionDurationSecs }: Props) {
   const badgeClass = isProductive
     ? 'status-badge--productive'
     : isLocked
-    ? 'status-badge--locked'
-    : 'status-badge--idle';
+      ? 'status-badge--locked'
+      : 'status-badge--idle';
 
   const label = isProductive ? 'Productive' : isLocked ? 'Locked' : 'Idle';
 
   return (
     <div className={`status-badge ${badgeClass}`}>
-      <span className={`badge-dot ${isProductive ? 'badge-dot--active' : isLocked ? 'badge-dot--locked' : ''}`} />
+      <span
+        className={`badge-dot ${isProductive ? 'badge-dot--active' : isLocked ? 'badge-dot--locked' : ''}`}
+      />
       <div>
         <span className="badge-label">{label}</span>
         <span className="badge-timer">{formatDuration(sessionDurationSecs)}</span>
