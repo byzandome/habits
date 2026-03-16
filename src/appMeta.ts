@@ -29,6 +29,7 @@ const APP_META: Record<string, AppMeta> = {
   // ── Collaboration / Communication ─────────────────────────────────────────
   msteams:       { displayName: 'Microsoft Teams', fallbackDomain: 'microsoft.com' },
   teams:         { displayName: 'Microsoft Teams', fallbackDomain: 'microsoft.com' },
+  "ms-teams":    { displayName: 'Microsoft Teams', fallbackDomain: 'microsoft.com' },
   'ms-teamsupd': { displayName: 'Microsoft Teams', fallbackDomain: 'microsoft.com' },
   slack:         { displayName: 'Slack',            fallbackDomain: 'slack.com'    },
   discord:       { displayName: 'Discord',          fallbackDomain: 'discord.com'  },

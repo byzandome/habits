@@ -160,10 +160,34 @@ pub fn get_app_usage(
 }
 
 /// Returns a `"data:image/png;base64,…"` string for the given process stem,
-/// or an empty string when the icon cannot be extracted.
+/// or an empty string when the exe path is unknown (frontend shows placeholder).
 #[tauri::command]
-pub fn get_app_icon(app_name: String) -> String {
-    crate::app_icon::get_icon_base64(&app_name)
+pub fn get_app_icon(app_name: String, state: State<'_, AppState>) -> String {
+    let conn = state.db.lock().unwrap();
+    let exe_path = crate::db::get_exe_path_for_app(&conn, &app_name)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    crate::app_icon::get_icon_base64_from_path(&exe_path)
+}
+
+/// Clears all cached exe paths stored in the DB so icons are re-resolved on
+/// the next request.  The frontend module-level icon cache is not accessible
+/// from Rust, so the frontend is responsible for clearing it after this call.
+#[tauri::command]
+pub fn clear_icon_cache(state: State<'_, AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    crate::db::clear_exe_path_cache(&conn).map_err(|e| e.to_string())?;
+    crate::app_icon::clear_in_memory_cache();
+    Ok(())
+}
+
+/// Deletes all recorded sessions and app-usage data, preserving settings.
+/// The tracker keeps running normally; a fresh session begins on the next poll.
+#[tauri::command]
+pub fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
+    let conn = state.db.lock().unwrap();
+    crate::db::clear_all_data(&conn).map_err(|e| e.to_string())
 }
 
 /// Persists settings and applies them immediately.

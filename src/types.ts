@@ -32,4 +32,5 @@ export interface Settings {
 export interface AppUsageStat {
   app_name: string;
   duration_secs: number;
+  exe_path: string;
 }

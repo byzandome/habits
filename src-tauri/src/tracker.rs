@@ -176,13 +176,19 @@ pub async fn run_tracker(db: Arc<Mutex<Connection>>, tracker: Arc<Mutex<TrackerS
             if current_status == "productive" {
                 let app_elapsed = (now - last_app_tick).num_seconds().max(0).min(MAX_ELAPSED_SECS);
                 if app_elapsed > 0 {
-                    let app_name = crate::active_app::get_active_app();
+                    let active_app = crate::active_app::get_active_app();
                     let local_date = now
                         .with_timezone(&Local)
                         .format("%Y-%m-%d")
                         .to_string();
                     if let Ok(conn) = db.lock() {
-                        let _ = crate::db::upsert_app_usage(&conn, &app_name, &local_date, app_elapsed);
+                        let _ = crate::db::upsert_app_usage(
+                            &conn,
+                            &active_app.name,
+                            &local_date,
+                            app_elapsed,
+                            &active_app.exe_path,
+                        );
                     }
                 }
             }

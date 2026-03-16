@@ -6,7 +6,7 @@ import { getDisplayName, getFallbackDomain } from '../appMeta';
 import type { AppUsageStat } from '../types';
 
 // ── Module-level icon cache (survives re-renders, cleared on page refresh) ───
-const iconCache = new Map<string, string | null>();
+export const iconCache = new Map<string, string | null>();
 const iconPending = new Set<string>();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -296,9 +296,16 @@ export function AppUsage() {
                     {/* App icon (real icon → favicon fallback → letter avatar) */}
                     <AppIconImg appName={s.app_name} onColorReady={handleColorReady} />
                     {/* Human-readable app name */}
-                    <span style={{ fontSize: 14, fontWeight: 500, color: '#E2E8F0' }}>
-                      {getDisplayName(s.app_name)}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: '#E2E8F0' }}>
+                        {getDisplayName(s.app_name)}
+                      </span>
+                      {import.meta.env.DEV && s.exe_path && (
+                        <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', lineHeight: 1.3 }}>
+                          {s.exe_path}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ color: '#64748B', fontSize: 12 }}>{share}%</span>

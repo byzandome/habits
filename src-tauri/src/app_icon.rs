@@ -1,90 +1,32 @@
-/// Extracts the icon for a given executable file-stem (e.g. `"msedge"`, `"chrome"`)
-/// and returns it as a `"data:image/png;base64,..."` string.
-/// Returns an empty string on any failure; never panics.
-pub fn get_icon_base64(app_name: &str) -> String {
-    match find_exe_path(app_name) {
-        Some(path) => extract_icon_base64(&path).unwrap_or_default(),
-        None => String::new(),
-    }
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+static ICON_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+fn cache() -> &'static Mutex<HashMap<String, String>> {
+    ICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-// ── Exe-path lookup ───────────────────────────────────────────────────────────
+/// Extracts the icon directly from a known exe path and returns it as a
+/// `"data:image/png;base64,..."` string.
+/// Returns an empty string on any failure or if `exe_path` is empty.
+/// Results are cached in memory for the lifetime of the process.
+pub fn get_icon_base64_from_path(exe_path: &str) -> String {
+    if exe_path.is_empty() { return String::new(); }
 
-fn find_exe_path(app_name: &str) -> Option<String> {
-    let exe_name = format!("{}.exe", app_name);
-
-    // 1. `where.exe` — covers PATH, %LOCALAPPDATA%\Microsoft\WindowsApps, etc.
-    if let Ok(out) = std::process::Command::new("where")
-        .arg(&exe_name)
-        .output()
-    {
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if let Some(line) = stdout.lines().next() {
-                let p = line.trim().to_string();
-                if !p.is_empty() && std::path::Path::new(&p).exists() {
-                    return Some(p);
-                }
-            }
-        }
+    if let Some(hit) = cache().lock().unwrap().get(exe_path).cloned() {
+        return hit;
     }
 
-    // 2. Common install directories — one level deep
-    let dirs: Vec<String> = [
-        std::env::var("PROGRAMFILES").ok(),
-        std::env::var("PROGRAMFILES(X86)").ok(),
-        std::env::var("LOCALAPPDATA").ok(),
-        Some("C:\\Windows\\System32".into()),
-        Some("C:\\Windows".into()),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    let result = extract_icon_base64(exe_path).unwrap_or_default();
+    cache().lock().unwrap().insert(exe_path.to_string(), result.clone());
+    result
+}
 
-    for dir in &dirs {
-        // {dir}\{name}.exe
-        let direct = format!("{}\\{}", dir, exe_name);
-        if std::path::Path::new(&direct).exists() {
-            return Some(direct);
-        }
-        // {dir}\{name}\{name}.exe
-        let nested = format!("{}\\{}\\{}", dir, app_name, exe_name);
-        if std::path::Path::new(&nested).exists() {
-            return Some(nested);
-        }
-    }
-
-    // 3. Hard-coded well-known paths that are not in PATH
-    let known: &[(&str, &str)] = &[
-        (
-            "msedge",
-            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        ),
-        (
-            "chrome",
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        ),
-        (
-            "chrome",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        ),
-        (
-            "brave",
-            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
-        ),
-        (
-            "Teams",
-            r"C:\Program Files\WindowsApps\MSTeams_*\ms-teams.exe",
-        ),
-    ];
-
-    for (stem, path) in known {
-        if stem.eq_ignore_ascii_case(app_name) && std::path::Path::new(path).exists() {
-            return Some(path.to_string());
-        }
-    }
-
-    None
+/// Clears the in-process icon cache, forcing icons to be re-extracted on the
+/// next request.
+pub fn clear_in_memory_cache() {
+    cache().lock().unwrap().clear();
 }
 
 // ── Icon extraction ───────────────────────────────────────────────────────────

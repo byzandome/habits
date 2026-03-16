@@ -22,4 +22,10 @@ export const api = {
 
   getAppUsage: (date: string) =>
     invoke<AppUsageStat[]>('get_app_usage', { date }),
+
+  clearIconCache: () =>
+    invoke<void>('clear_icon_cache'),
+
+  clearAllData: () =>
+    invoke<void>('clear_all_data'),
 };

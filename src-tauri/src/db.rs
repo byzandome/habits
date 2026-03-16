@@ -27,6 +27,7 @@ pub struct DailySummary {
 pub struct AppUsageStat {
     pub app_name: String,
     pub duration_secs: i64,
+    pub exe_path: String,
 }
 
 // ── Schema init ──────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             app_name      TEXT NOT NULL,
             date          TEXT NOT NULL,
             duration_secs INTEGER NOT NULL DEFAULT 0,
+            exe_path      TEXT NOT NULL DEFAULT '',
             PRIMARY KEY (app_name, date)
          );
          INSERT OR IGNORE INTO settings (key, value) VALUES ('idle_threshold_mins', '5');
@@ -87,6 +89,27 @@ pub fn migrate_db(conn: &Connection) -> Result<()> {
              );",
         )?;
     }
+
+    // Add exe_path column to app_usage if it was created before this field existed.
+    let has_exe_path: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(app_usage)")?;
+        let mut rows = stmt.query([])?;
+        let mut found = false;
+        while let Some(row) = rows.next()? {
+            let col_name: String = row.get(1)?;
+            if col_name == "exe_path" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has_exe_path {
+        conn.execute_batch(
+            "ALTER TABLE app_usage ADD COLUMN exe_path TEXT NOT NULL DEFAULT '';",
+        )?;
+    }
+
     Ok(())
 }
 
@@ -193,19 +216,43 @@ pub fn get_history(conn: &Connection, days: u32) -> Result<Vec<DailySummary>> {
 
 // ── App usage ─────────────────────────────────────────────────────────────────
 
-/// Adds `duration_secs` to the running total for (app_name, date).
+/// Adds `duration_secs` to the running total for (app_name, date) and stores
+/// `exe_path` (kept from the first non-empty value seen for that app).
 /// Creates the row if it does not yet exist.
 pub fn upsert_app_usage(
     conn: &Connection,
     app_name: &str,
     date: &str,
     duration_secs: i64,
+    exe_path: &str,
 ) -> Result<()> {
     conn.execute(
-        "INSERT INTO app_usage (app_name, date, duration_secs) VALUES (?1, ?2, ?3)
-         ON CONFLICT(app_name, date) DO UPDATE SET duration_secs = duration_secs + ?3",
-        params![app_name, date, duration_secs],
+        "INSERT INTO app_usage (app_name, date, duration_secs, exe_path) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(app_name, date) DO UPDATE SET
+             duration_secs = duration_secs + excluded.duration_secs,
+             exe_path = CASE WHEN excluded.exe_path != '' THEN excluded.exe_path ELSE exe_path END",
+        params![app_name, date, duration_secs, exe_path],
     )?;
+    Ok(())
+}
+
+/// Returns the stored exe path for the given app name, or `None` when unknown.
+pub fn get_exe_path_for_app(conn: &Connection, app_name: &str) -> Result<Option<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT exe_path FROM app_usage WHERE app_name = ?1 AND exe_path != '' LIMIT 1",
+    )?;
+    let mut rows = stmt.query(params![app_name])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(row.get(0)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Clears all stored exe paths so they will be re-discovered on the next poll
+/// or icon request.  Useful after an app update moves its executable.
+pub fn clear_exe_path_cache(conn: &Connection) -> Result<()> {
+    conn.execute("UPDATE app_usage SET exe_path = ''", [])?;
     Ok(())
 }
 
@@ -213,7 +260,7 @@ pub fn upsert_app_usage(
 /// duration descending.
 pub fn get_app_usage_for_date(conn: &Connection, date: &str) -> Result<Vec<AppUsageStat>> {
     let mut stmt = conn.prepare(
-        "SELECT app_name, duration_secs FROM app_usage
+        "SELECT app_name, duration_secs, COALESCE(exe_path, '') FROM app_usage
          WHERE date = ?1
          ORDER BY duration_secs DESC",
     )?;
@@ -222,6 +269,7 @@ pub fn get_app_usage_for_date(conn: &Connection, date: &str) -> Result<Vec<AppUs
         Ok(AppUsageStat {
             app_name: row.get(0)?,
             duration_secs: row.get(1)?,
+            exe_path: row.get(2)?,
         })
     })?;
 
@@ -244,4 +292,14 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
         params![key, value],
     )?;
     Ok(())
+}
+
+// ── Data wipe ─────────────────────────────────────────────────────────────────
+
+/// Deletes all sessions and app-usage rows, preserving settings.
+pub fn clear_all_data(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "DELETE FROM sessions;
+         DELETE FROM app_usage;",
+    )
 }

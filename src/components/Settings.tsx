@@ -2,10 +2,48 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Settings } from '../types';
 
+// Module-level icon cache exported from AppUsage — we clear it here directly.
+// Import the Map reference so we can wipe it without re-mounting the component.
+import { iconCache } from './AppUsage';
+
 export function Settings() {
   const [settings, setSettings] = useState<Settings>({ idle_threshold_mins: 5, autostart: false });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+  const [cleared, setCleared] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+
+  const handleClearCache = async () => {
+    setClearing(true);
+    try {
+      await api.clearIconCache();
+      iconCache.clear();
+      setCleared(true);
+      setTimeout(() => setCleared(false), 2500);
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleDeleteData = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api.clearAllData();
+      iconCache.clear();
+      setDeleted(true);
+      setConfirmDelete(false);
+      setTimeout(() => setDeleted(false), 3000);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -100,6 +138,58 @@ export function Settings() {
         >
           {saved ? '✓ Saved!' : 'Save Settings'}
         </button>
+
+        {/* Clear cache */}
+        <div className="card settings-card" style={{ marginTop: 8 }}>
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">Clear Icon Cache</div>
+              <div className="settings-desc">
+                Forces all app icons to be re-fetched on the next visit.
+                Useful after updating an app or if icons appear broken.
+              </div>
+            </div>
+            <button
+              className={`danger-btn ${cleared ? 'danger-btn--done' : ''}`}
+              onClick={handleClearCache}
+              disabled={clearing}
+            >
+              {cleared ? '✓ Cleared' : clearing ? 'Clearing…' : 'Clear Cache'}
+            </button>
+          </div>
+        </div>
+
+        {/* Delete all data */}
+        <div className="card settings-card" style={{ borderColor: confirmDelete ? 'rgba(239,68,68,0.40)' : undefined }}>
+          <div className="settings-row">
+            <div>
+              <div className="settings-label" style={{ color: '#F87171' }}>Delete All Data</div>
+              <div className="settings-desc">
+                Permanently removes all sessions, app-usage history and icon
+                cache. Settings are kept. This cannot be undone.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              {confirmDelete && (
+                <button
+                  className="danger-btn"
+                  style={{ borderColor: 'rgba(100,116,139,0.30)', background: 'rgba(100,116,139,0.10)', color: '#94A3B8' }}
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                className={`danger-btn ${deleted ? 'danger-btn--done' : ''}`}
+                onClick={handleDeleteData}
+                disabled={deleting}
+              >
+                {deleted ? '✓ Deleted' : deleting ? 'Deleting…' : confirmDelete ? 'Confirm Delete' : 'Delete All Data'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

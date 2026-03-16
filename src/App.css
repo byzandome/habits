@@ -142,7 +142,7 @@ body {
   scrollbar-color: #1E293B transparent;
 }
 
-.page { padding: 32px 36px; max-width: 860px; }
+.page { padding: 32px 36px; width: 100%; }
 
 /* ── Page header ────────────────────────────────────────────────────────────── */
 .page-header {
@@ -506,6 +506,28 @@ body {
 
 .save-btn:hover { background: rgba(34,197,94,0.22); }
 .save-btn--saved { background: rgba(34,197,94,0.25); color: #4ADE80; }
+
+/* ── Danger / clear-cache button ───────────────────────────────────────────── */
+.danger-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(239,68,68,0.30);
+  background: rgba(239,68,68,0.10);
+  color: #F87171;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.danger-btn:hover:not(:disabled) { background: rgba(239,68,68,0.20); }
+.danger-btn:disabled { opacity: 0.55; cursor: default; }
+.danger-btn--done {
+  border-color: rgba(34,197,94,0.30);
+  background: rgba(34,197,94,0.12);
+  color: #4ADE80;
+}
 
 /* ── Refresh button ─────────────────────────────────────────────────────────── */
 @keyframes spin {
