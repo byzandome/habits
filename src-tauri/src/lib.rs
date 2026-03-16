@@ -82,6 +82,7 @@ pub fn run() {
                 current_session_id: initial_session_id,
                 current_active_secs: 0,
                 current_idle_secs: 0,
+                current_locked_secs: 0,
             };
 
             let app_state = AppState {
@@ -95,8 +96,16 @@ pub fn run() {
 
             app.manage(app_state);
 
+            // ── Session lock monitor (WTS notifications) ──────────────────────
+            // The wake notify lets the WTS thread poke the tracker loop the
+            // instant a lock / unlock event fires, so status changes appear in
+            // the UI almost immediately instead of waiting up to 5 s.
+            let wake = std::sync::Arc::new(tokio::sync::Notify::new());
+            idle::set_tracker_wake(std::sync::Arc::clone(&wake));
+            idle::start_session_monitor();
+
             // ── Background tracking task ──────────────────────────────────────
-            tauri::async_runtime::spawn(tracker::run_tracker(bg_db, bg_tracker, app.handle().clone()));
+            tauri::async_runtime::spawn(tracker::run_tracker(bg_db, bg_tracker, app.handle().clone(), wake));
 
             // ── System tray ───────────────────────────────────────────────────
             let show_item =
@@ -180,12 +189,12 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 let now = Utc::now();
                 let state = app_handle.state::<AppState>();
-                let (session_id, active_secs, idle_secs) = {
+                let (session_id, active_secs, idle_secs, locked_secs) = {
                     let t = state.tracker.lock().unwrap();
-                    (t.current_session_id, t.current_active_secs, t.current_idle_secs)
+                    (t.current_session_id, t.current_active_secs, t.current_idle_secs, t.current_locked_secs)
                 };
                 if let Ok(conn) = state.db.lock() {
-                    let _ = db::update_session_time(&conn, session_id, active_secs, idle_secs);
+                    let _ = db::update_session_time(&conn, session_id, active_secs, idle_secs, locked_secs);
                     let _ = db::end_session(&conn, session_id, &now);
                 };
             }

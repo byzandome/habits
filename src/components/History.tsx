@@ -65,6 +65,7 @@ export function History() {
     day: format(parseISO(d.date), 'EEE dd'),
     Productive: d.productive_secs,
     Idle: d.idle_secs,
+    Locked: d.locked_secs,
     date: d.date,
   }));
 
@@ -114,6 +115,7 @@ export function History() {
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
               <Bar dataKey="Productive" fill="#22C55E" radius={[4, 4, 0, 0]} maxBarSize={32} />
               <Bar dataKey="Idle" fill="#1E293B" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Locked" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -122,7 +124,7 @@ export function History() {
       {/* Day rows */}
       <div className="session-list" style={{ marginTop: 16 }}>
         {[...data].reverse().map((d) => {
-          const total = d.productive_secs + d.idle_secs;
+          const total = d.productive_secs + d.idle_secs + d.locked_secs;
           const pct = total > 0 ? Math.round((d.productive_secs / total) * 100) : 0;
           return (
             <div key={d.date} className="card history-row">
@@ -133,6 +135,12 @@ export function History() {
                 <span style={{ color: '#22C55E' }}>{formatHM(d.productive_secs)}</span>
                 <span style={{ color: '#475569' }}>·</span>
                 <span style={{ color: '#64748B' }}>{formatHM(d.idle_secs)} idle</span>
+                {d.locked_secs > 0 && (
+                  <>
+                    <span style={{ color: '#475569' }}>·</span>
+                    <span style={{ color: '#F59E0B' }}>{formatHM(d.locked_secs)} locked</span>
+                  </>
+                )}
                 <span className="pct-badge" style={{
                   background: pct >= 70 ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.15)',
                   color: pct >= 70 ? '#22C55E' : '#64748B',

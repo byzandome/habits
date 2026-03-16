@@ -1,5 +1,5 @@
 interface Props {
-  status: 'productive' | 'idle';
+  status: 'productive' | 'idle' | 'locked';
   sessionDurationSecs: number;
 }
 
@@ -14,12 +14,21 @@ function formatDuration(secs: number): string {
 
 export function StatusBadge({ status, sessionDurationSecs }: Props) {
   const isProductive = status === 'productive';
+  const isLocked = status === 'locked';
+
+  const badgeClass = isProductive
+    ? 'status-badge--productive'
+    : isLocked
+    ? 'status-badge--locked'
+    : 'status-badge--idle';
+
+  const label = isProductive ? 'Productive' : isLocked ? 'Locked' : 'Idle';
 
   return (
-    <div className={`status-badge ${isProductive ? 'status-badge--productive' : 'status-badge--idle'}`}>
-      <span className={`badge-dot ${isProductive ? 'badge-dot--active' : ''}`} />
+    <div className={`status-badge ${badgeClass}`}>
+      <span className={`badge-dot ${isProductive ? 'badge-dot--active' : isLocked ? 'badge-dot--locked' : ''}`} />
       <div>
-        <span className="badge-label">{isProductive ? 'Productive' : 'Idle'}</span>
+        <span className="badge-label">{label}</span>
         <span className="badge-timer">{formatDuration(sessionDurationSecs)}</span>
       </div>
     </div>

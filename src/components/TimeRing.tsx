@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 interface Props {
   productiveSecs: number;
   idleSecs: number;
+  lockedSecs: number;
 }
 
 function formatCenter(secs: number): string {
@@ -15,17 +16,19 @@ function formatCenter(secs: number): string {
 
 const PRODUCTIVE_COLOR = '#22C55E';
 const IDLE_COLOR = '#1E293B';
+const LOCKED_COLOR = '#F59E0B';
 const EMPTY_COLOR = '#1E293B';
 
-export function TimeRing({ productiveSecs, idleSecs }: Props) {
-  const total = productiveSecs + idleSecs;
+export function TimeRing({ productiveSecs, idleSecs, lockedSecs }: Props) {
+  const total = productiveSecs + idleSecs + lockedSecs;
 
   const data =
     total > 0
       ? [
           { name: 'Productive', value: productiveSecs, color: PRODUCTIVE_COLOR },
-          { name: 'Idle', value: idleSecs, color: IDLE_COLOR },
-        ]
+          { name: 'Idle',       value: idleSecs,       color: IDLE_COLOR },
+          { name: 'Locked',     value: lockedSecs,     color: LOCKED_COLOR },
+        ].filter((d) => d.value > 0)
       : [{ name: 'Empty', value: 1, color: EMPTY_COLOR }];
 
   return (

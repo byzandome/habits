@@ -96,6 +96,14 @@ export function Sessions() {
                         Idle: {formatDuration(s.idle_secs)}
                       </span>
                     )}
+                    {s.locked_secs > 0 && (
+                      <span
+                        className="type-badge"
+                        style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B' }}
+                      >
+                        Locked: {formatDuration(s.locked_secs)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

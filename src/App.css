@@ -183,6 +183,10 @@ body {
   background: rgba(100,116,139,0.08);
   border-color: rgba(100,116,139,0.2);
 }
+.status-badge--locked {
+  background: rgba(245,158,11,0.08);
+  border-color: rgba(245,158,11,0.25);
+}
 
 .badge-dot {
   width: 8px;
@@ -195,6 +199,10 @@ body {
 .badge-dot--active {
   background: #22C55E;
   animation: dot-pulse 2s ease-in-out infinite;
+}
+
+.badge-dot--locked {
+  background: #F59E0B;
 }
 
 .badge-label {

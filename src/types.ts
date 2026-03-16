@@ -1,13 +1,14 @@
 // Mirrors Rust response types from commands.rs
 
 export interface CurrentStatus {
-  status: 'productive' | 'idle';
+  status: 'productive' | 'idle' | 'locked';
   session_duration_secs: number;
 }
 
 export interface TodayStats {
   productive_secs: number;
   idle_secs: number;
+  locked_secs: number;
 }
 
 export interface Session {
@@ -16,12 +17,14 @@ export interface Session {
   end_time: string;     // ISO 8601 UTC, empty string = in-progress
   active_secs: number;
   idle_secs: number;
+  locked_secs: number;
 }
 
 export interface DailySummary {
   date: string;         // "YYYY-MM-DD" local
   productive_secs: number;
   idle_secs: number;
+  locked_secs: number;
 }
 
 export interface Settings {

@@ -16,6 +16,7 @@ pub struct CurrentStatus {
 pub struct TodayStats {
     pub productive_secs: i64,
     pub idle_secs: i64,
+    pub locked_secs: i64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,12 +48,12 @@ pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String>
     let local_today = Local::now().format("%Y-%m-%d").to_string();
 
     // Snapshot in-progress counters before releasing the lock.
-    let (cur_active, cur_idle, session_start) = {
+    let (cur_active, cur_idle, cur_locked, session_start) = {
         let t = state.tracker.lock().unwrap();
-        (t.current_active_secs, t.current_idle_secs, t.session_start)
+        (t.current_active_secs, t.current_idle_secs, t.current_locked_secs, t.session_start)
     };
 
-    let (mut prod, mut idle) = {
+    let (mut prod, mut idle, mut locked) = {
         let conn = state.db.lock().unwrap();
         db::get_today_stats(&conn, &local_today).map_err(|e| e.to_string())?
     };
@@ -63,13 +64,15 @@ pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String>
         .format("%Y-%m-%d")
         .to_string();
     if session_local_date == local_today {
-        prod += cur_active;
-        idle += cur_idle;
+        prod   += cur_active;
+        idle   += cur_idle;
+        locked += cur_locked;
     }
 
     Ok(TodayStats {
         productive_secs: prod,
         idle_secs: idle,
+        locked_secs: locked,
     })
 }
 
@@ -82,9 +85,9 @@ pub fn get_sessions_for_date(
     let local_today = Local::now().format("%Y-%m-%d").to_string();
 
     // Snapshot tracker
-    let (cur_active, cur_idle, session_start) = {
+    let (cur_active, cur_idle, cur_locked, session_start) = {
         let t = state.tracker.lock().unwrap();
-        (t.current_active_secs, t.current_idle_secs, t.session_start)
+        (t.current_active_secs, t.current_idle_secs, t.current_locked_secs, t.session_start)
     };
 
     let mut sessions = {
@@ -109,6 +112,7 @@ pub fn get_sessions_for_date(
                 end_time: String::new(), // empty = in-progress
                 active_secs: cur_active,
                 idle_secs: cur_idle,
+                locked_secs: cur_locked,
             });
             sessions.sort_by(|a, b| b.start_time.cmp(&a.start_time)); // newest first
         }

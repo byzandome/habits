@@ -5,8 +5,9 @@ use serde::Serialize;
 // ── Data types ──────────────────────────────────────────────────────────────
 
 /// One app session: from when the tracker starts (or resumes after suspend) to
-/// when it stops (app quit / shutdown / suspend).  Idle time within the session
-/// is accumulated in `idle_secs`; active (non-idle) time in `active_secs`.
+/// when it stops (app quit / shutdown / suspend).  Time within the session is
+/// split into `active_secs` (productive), `idle_secs` (threshold-based
+/// inactivity), and `locked_secs` (screen-lock).
 #[derive(Debug, Serialize, Clone)]
 pub struct Session {
     pub id: i64,
@@ -14,6 +15,7 @@ pub struct Session {
     pub end_time: String,     // ISO 8601 UTC, empty string = in-progress
     pub active_secs: i64,
     pub idle_secs: i64,
+    pub locked_secs: i64,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -21,6 +23,7 @@ pub struct DailySummary {
     pub date: String,            // "YYYY-MM-DD" local date
     pub productive_secs: i64,
     pub idle_secs: i64,
+    pub locked_secs: i64,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -38,8 +41,9 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             start_time  TEXT NOT NULL,
             end_time    TEXT,
-            active_secs INTEGER NOT NULL DEFAULT 0,
-            idle_secs   INTEGER NOT NULL DEFAULT 0
+            active_secs  INTEGER NOT NULL DEFAULT 0,
+            idle_secs    INTEGER NOT NULL DEFAULT 0,
+            locked_secs  INTEGER NOT NULL DEFAULT 0
          );
          CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
@@ -84,9 +88,30 @@ pub fn migrate_db(conn: &Connection) -> Result<()> {
                  id          INTEGER PRIMARY KEY AUTOINCREMENT,
                  start_time  TEXT NOT NULL,
                  end_time    TEXT,
-                 active_secs INTEGER NOT NULL DEFAULT 0,
-                 idle_secs   INTEGER NOT NULL DEFAULT 0
+                 active_secs  INTEGER NOT NULL DEFAULT 0,
+                 idle_secs    INTEGER NOT NULL DEFAULT 0,
+                 locked_secs  INTEGER NOT NULL DEFAULT 0
              );",
+        )?;
+    }
+
+    // Add locked_secs column if this DB was created before subcategorised idle.
+    let has_locked_secs: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(sessions)")?;
+        let mut rows = stmt.query([])?;
+        let mut found = false;
+        while let Some(row) = rows.next()? {
+            let col_name: String = row.get(1)?;
+            if col_name == "locked_secs" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has_locked_secs {
+        conn.execute_batch(
+            "ALTER TABLE sessions ADD COLUMN locked_secs INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
 
@@ -118,22 +143,23 @@ pub fn migrate_db(conn: &Connection) -> Result<()> {
 /// Opens a new in-progress session and returns its DB row id.
 pub fn begin_session(conn: &Connection, start: &DateTime<Utc>) -> Result<i64> {
     conn.execute(
-        "INSERT INTO sessions (start_time, active_secs, idle_secs) VALUES (?1, 0, 0)",
+        "INSERT INTO sessions (start_time, active_secs, idle_secs, locked_secs) VALUES (?1, 0, 0, 0)",
         params![start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
-/// Persists the accumulated active/idle counters for the in-progress session.
+/// Persists the accumulated active/idle/locked counters for the in-progress session.
 pub fn update_session_time(
     conn: &Connection,
     id: i64,
     active_secs: i64,
     idle_secs: i64,
+    locked_secs: i64,
 ) -> Result<()> {
     conn.execute(
-        "UPDATE sessions SET active_secs = ?1, idle_secs = ?2 WHERE id = ?3",
-        params![active_secs, idle_secs, id],
+        "UPDATE sessions SET active_secs = ?1, idle_secs = ?2, locked_secs = ?3 WHERE id = ?4",
+        params![active_secs, idle_secs, locked_secs, id],
     )?;
     Ok(())
 }
@@ -149,17 +175,18 @@ pub fn end_session(conn: &Connection, id: i64, end: &DateTime<Utc>) -> Result<()
 
 // ── Query helpers ─────────────────────────────────────────────────────────────
 
-/// Returns (active_secs, idle_secs) for completed sessions on a given local
-/// date "YYYY-MM-DD".  The caller is responsible for adding the in-progress
-/// session's counters on top.
-pub fn get_today_stats(conn: &Connection, local_today: &str) -> Result<(i64, i64)> {
-    let row: (i64, i64) = conn.query_row(
-        "SELECT COALESCE(SUM(active_secs), 0), COALESCE(SUM(idle_secs), 0)
+/// Returns (active_secs, idle_secs, locked_secs) for completed sessions on a
+/// given local date "YYYY-MM-DD".  The caller adds the in-progress counters.
+pub fn get_today_stats(conn: &Connection, local_today: &str) -> Result<(i64, i64, i64)> {
+    let row: (i64, i64, i64) = conn.query_row(
+        "SELECT COALESCE(SUM(active_secs), 0),
+                COALESCE(SUM(idle_secs),   0),
+                COALESCE(SUM(locked_secs), 0)
          FROM sessions
          WHERE date(datetime(start_time, 'localtime')) = ?1
            AND end_time IS NOT NULL",
         params![local_today],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )?;
     Ok(row)
 }
@@ -167,7 +194,7 @@ pub fn get_today_stats(conn: &Connection, local_today: &str) -> Result<(i64, i64
 /// Returns all completed sessions for a given local date "YYYY-MM-DD".
 pub fn get_sessions_for_date(conn: &Connection, local_date: &str) -> Result<Vec<Session>> {
     let mut stmt = conn.prepare(
-        "SELECT id, start_time, end_time, active_secs, idle_secs
+        "SELECT id, start_time, end_time, active_secs, idle_secs, locked_secs
          FROM sessions
          WHERE date(datetime(start_time, 'localtime')) = ?1
          ORDER BY start_time ASC",
@@ -180,6 +207,7 @@ pub fn get_sessions_for_date(conn: &Connection, local_date: &str) -> Result<Vec<
             end_time: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
             active_secs: row.get(3)?,
             idle_secs: row.get(4)?,
+            locked_secs: row.get(5)?,
         })
     })?;
 
@@ -193,8 +221,9 @@ pub fn get_history(conn: &Connection, days: u32) -> Result<Vec<DailySummary>> {
     let mut stmt = conn.prepare(
         "SELECT
              date(datetime(start_time, 'localtime')) AS day,
-             COALESCE(SUM(active_secs), 0) AS prod_secs,
-             COALESCE(SUM(idle_secs),   0) AS idle_secs
+             COALESCE(SUM(active_secs),  0) AS prod_secs,
+             COALESCE(SUM(idle_secs),    0) AS idle_secs,
+             COALESCE(SUM(locked_secs),  0) AS locked_secs
          FROM sessions
          WHERE end_time IS NOT NULL
            AND date(datetime(start_time, 'localtime'))
@@ -208,6 +237,7 @@ pub fn get_history(conn: &Connection, days: u32) -> Result<Vec<DailySummary>> {
             date: row.get(0)?,
             productive_secs: row.get(1)?,
             idle_secs: row.get(2)?,
+            locked_secs: row.get(3)?,
         })
     })?;
 
