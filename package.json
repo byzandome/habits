@@ -13,6 +13,11 @@
     "fmt:check": "oxfmt --check",
     "tauri": "tauri"
   },
+  "author": {
+    "email": "miguel@zandome.dev",
+    "name": "Miguel Mendoza",
+    "url": "https://zandome.dev"
+  },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@tailwindcss/vite": "^4.2.1",
