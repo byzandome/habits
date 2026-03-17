@@ -75,24 +75,13 @@ pub async fn run_tracker(
 
         // ── Suspend / sleep / hibernate detection ────────────────────────────
         if actual_gap_secs > SUSPEND_GAP_SECS {
+            // The system was suspended. Just reset the in-memory counters so
+            // time during suspension is not attributed to any bucket.  The same
+            // day's session (one per date) is reused; we do NOT close it.
             {
                 let mut t = tracker.lock().unwrap();
-                let _ = session_repo.update_session_time(
-                    t.current_session_id,
-                    t.current_active_secs,
-                    t.current_idle_secs,
-                    t.current_locked_secs,
-                );
-                let _ = session_repo.end_session(t.current_session_id, &now);
-
-                if let Ok(new_id) = session_repo.begin_session(&now) {
-                    t.current_session_id = new_id;
-                }
                 t.session_start = now;
                 t.status = "idle".to_string();
-                t.current_active_secs = 0;
-                t.current_idle_secs = 0;
-                t.current_locked_secs = 0;
                 poll_count = 0;
             }
 
@@ -166,7 +155,7 @@ pub async fn run_tracker(
             // ── Periodic DB checkpoint ────────────────────────────────────────
             if poll_count >= CHECKPOINT_POLLS {
                 let _ = session_repo.update_session_time(
-                    t.current_session_id,
+                    &t.current_session_id,
                     t.current_active_secs,
                     t.current_idle_secs,
                     t.current_locked_secs,

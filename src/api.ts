@@ -5,6 +5,7 @@ import type {
   DailySummary,
   Settings,
   AppUsageStat,
+  Interval,
 } from './types';
 
 import { invoke } from '@tauri-apps/api/core';
@@ -14,7 +15,7 @@ export const api = {
 
   getTodayStats: () => invoke<TodayStats>('get_today_stats'),
 
-  getSessionsForDate: (date: string) => invoke<Session[]>('get_sessions_for_date', { date }),
+  getSessionForDate: (date: string) => invoke<Session | null>('get_session_for_date', { date }),
 
   getHistory: (days = 7) => invoke<DailySummary[]>('get_history', { days }),
 
@@ -28,4 +29,7 @@ export const api = {
   clearIconCache: () => invoke<void>('clear_icon_cache'),
 
   clearAllData: () => invoke<void>('clear_all_data'),
+
+  getIntervalsForSession: (session_id: string) =>
+    invoke<Interval[]>('get_intervals_for_session', { session_id }),
 };

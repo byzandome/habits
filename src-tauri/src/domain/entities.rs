@@ -1,16 +1,17 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-/// One recorded app session: spans from tracker start (or resume after suspend)
-/// to when it stops. Time is split across active, idle, and locked buckets.
+/// The single session for a given local date.
 #[derive(Debug, Serialize, Clone)]
 pub struct Session {
-    pub id: i64,
-    pub start_time: String,   // ISO 8601 UTC
+    pub id: String,
+    pub date: String,         // "YYYY-MM-DD" local date
+    pub start_time: String,   // ISO 8601 UTC — first app boot of the day
     pub end_time: String,     // ISO 8601 UTC; empty string = in-progress
     pub active_secs: i64,
     pub idle_secs: i64,
     pub locked_secs: i64,
+    pub unknown_secs: i64,
 }
 
 /// Per-day aggregated summary used for the history view.
@@ -28,6 +29,20 @@ pub struct AppUsageStat {
     pub app_name: String,
     pub duration_secs: i64,
     pub exe_path: String,
+    pub pct_of_day: f64,
+}
+
+/// One interval row: cumulative time for a single status type within a session.
+#[derive(Debug, Serialize, Clone)]
+pub struct Interval {
+    pub id: String,
+    pub session_id: String,
+    pub app_usage_id: Option<String>,
+    pub start_time: String,
+    pub end_time: Option<String>,
+    pub duration_secs: i64,
+    #[serde(rename = "type")]
+    pub interval_type: String,  // "active" | "idle" | "locked" | "unknown"
 }
 
 /// In-memory tracker state — shared between the background tracking loop and
@@ -39,8 +54,8 @@ pub struct TrackerState {
     pub session_start: DateTime<Utc>,
     /// Seconds of inactivity that triggers the productive → idle transition.
     pub idle_threshold_secs: u64,
-    /// DB row id of the currently-open app session (–1 while not yet inserted).
-    pub current_session_id: i64,
+    /// UUID of the currently-open app session (empty string while not yet inserted).
+    pub current_session_id: String,
     /// Active seconds accumulated so far in the current session.
     pub current_active_secs: i64,
     /// Idle seconds accumulated so far in the current session.

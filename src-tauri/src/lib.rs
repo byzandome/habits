@@ -112,9 +112,10 @@ pub fn run() {
                 "productive"
             };
 
-            // Open the first app session via the SessionRepository port.
+            // Open (or reuse) today's session via the SessionRepository port.
+            let local_today = chrono::Local::now().format("%Y-%m-%d").to_string();
             let initial_session_id = db
-                .begin_session(&now)
+                .begin_session(&local_today, &now)
                 .expect("failed to create initial session");
 
             let tracker_state = TrackerState {
@@ -212,7 +213,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             presentation::commands::get_current_status,
             presentation::commands::get_today_stats,
-            presentation::commands::get_sessions_for_date,
+            presentation::commands::get_session_for_date,
             presentation::commands::get_history,
             presentation::commands::get_settings,
             presentation::commands::set_settings,
@@ -220,6 +221,7 @@ pub fn run() {
             presentation::commands::get_app_icon,
             presentation::commands::clear_icon_cache,
             presentation::commands::clear_all_data,
+            presentation::commands::get_intervals_for_session,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -238,14 +240,14 @@ pub fn run() {
                 let (session_id, active_secs, idle_secs, locked_secs) = {
                     let t = state.tracker.lock().unwrap();
                     (
-                        t.current_session_id,
+                        t.current_session_id.clone(),
                         t.current_active_secs,
                         t.current_idle_secs,
                         t.current_locked_secs,
                     )
                 };
-                let _ = state.db.update_session_time(session_id, active_secs, idle_secs, locked_secs);
-                let _ = state.db.end_session(session_id, &now);
+                let _ = state.db.update_session_time(&session_id, active_secs, idle_secs, locked_secs);
+                let _ = state.db.end_session(&session_id, &now);
             }
         });
 }

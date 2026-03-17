@@ -3,10 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::{
-    domain::{
-        entities::TrackerState,
-        ports::{AppUsageRepository, SessionRepository, SettingsRepository},
-    },
+    domain::ports::{AppUsageRepository, SessionRepository, SettingsRepository},
     AppState,
 };
 
@@ -31,23 +28,13 @@ pub struct Settings {
     pub autostart: bool,
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn tracker_snapshot(t: &TrackerState) -> (i64, i64, i64, chrono::DateTime<Utc>) {
-    (
-        t.current_active_secs,
-        t.current_idle_secs,
-        t.current_locked_secs,
-        t.session_start,
-    )
-}
-
 // ── Commands ──────────────────────────────────────────────────────────────────
 
 /// Returns the current tracking status and elapsed seconds of the current
 /// session so the UI can display a live running clock.
 #[tauri::command]
 pub fn get_current_status(state: State<'_, AppState>) -> Result<CurrentStatus, String> {
+
     let t = state.tracker.lock().unwrap();
     let duration = (Utc::now() - t.session_start).num_seconds().max(0)
         + t.current_active_secs
@@ -63,22 +50,15 @@ pub fn get_current_status(state: State<'_, AppState>) -> Result<CurrentStatus, S
 #[tauri::command]
 pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String> {
     let local_today = Local::now().format("%Y-%m-%d").to_string();
-    let (cur_active, cur_idle, cur_locked, session_start) = {
+    let (cur_active, cur_idle, cur_locked) = {
         let t = state.tracker.lock().unwrap();
-        tracker_snapshot(&t)
+        (t.current_active_secs, t.current_idle_secs, t.current_locked_secs)
     };
 
     let (mut prod, mut idle, mut locked) = state.db.get_today_stats(&local_today)?;
-
-    let session_local_date = session_start
-        .with_timezone(&Local)
-        .format("%Y-%m-%d")
-        .to_string();
-    if session_local_date == local_today {
-        prod += cur_active;
-        idle += cur_idle;
-        locked += cur_locked;
-    }
+    prod   += cur_active;
+    idle   += cur_idle;
+    locked += cur_locked;
 
     Ok(TodayStats {
         productive_secs: prod,
@@ -87,40 +67,38 @@ pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String>
     })
 }
 
-/// Returns all sessions (completed + in-progress) for a local date "YYYY-MM-DD".
+/// Returns the session for a local date "YYYY-MM-DD", including live in-memory
+/// counters merged in when the date is today.
 #[tauri::command]
-pub fn get_sessions_for_date(
+pub fn get_session_for_date(
     state: State<'_, AppState>,
     date: String,
-) -> Result<Vec<crate::domain::entities::Session>, String> {
+) -> Result<Option<crate::domain::entities::Session>, String> {
+    use chrono::Local;
     let local_today = Local::now().format("%Y-%m-%d").to_string();
-    let (cur_active, cur_idle, cur_locked, session_start) = {
-        let t = state.tracker.lock().unwrap();
-        tracker_snapshot(&t)
-    };
 
-    let mut sessions = state.db.get_sessions_for_date(&date)?;
+    let mut session = state.db.get_session_for_date(&date)?;
 
+    // Merge live in-memory counters into today's (possibly still-open) session.
     if date == local_today {
-        let session_local_date = session_start
-            .with_timezone(&Local)
-            .format("%Y-%m-%d")
-            .to_string();
-        if session_local_date == local_today {
-            sessions.retain(|s| !s.end_time.is_empty());
-            sessions.push(crate::domain::entities::Session {
-                id: -1,
-                start_time: session_start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                end_time: String::new(),
-                active_secs: cur_active,
-                idle_secs: cur_idle,
-                locked_secs: cur_locked,
-            });
-            sessions.sort_by(|a, b| b.start_time.cmp(&a.start_time));
-        }
+        let t = state.tracker.lock().unwrap();
+        let entry = session.get_or_insert_with(|| crate::domain::entities::Session {
+            id: t.current_session_id.clone(),
+            date: date.clone(),
+            start_time: t.session_start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            end_time: String::new(),
+            active_secs: 0,
+            idle_secs: 0,
+            locked_secs: 0,
+            unknown_secs: 0,
+        });
+        entry.active_secs += t.current_active_secs;
+        entry.idle_secs   += t.current_idle_secs;
+        entry.locked_secs += t.current_locked_secs;
+        entry.end_time = String::new(); // still ongoing
     }
 
-    Ok(sessions)
+    Ok(session)
 }
 
 /// Returns per-day summaries for the last `days` days (default 7), newest first.
@@ -187,6 +165,15 @@ pub fn clear_icon_cache(state: State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
     state.db.clear_all_data()
+}
+
+/// Returns all intervals for a given session UUID.
+#[tauri::command]
+pub fn get_intervals_for_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<crate::domain::entities::Interval>, String> {
+    state.db.get_intervals_for_session(&session_id)
 }
 
 /// Persists settings and applies them immediately (threshold + OS autostart).
