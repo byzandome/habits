@@ -23,19 +23,16 @@
     "no-var": "error", // use let / const
     "prefer-const": "error", // signal immutability intent
     "eqeqeq": ["error", "always"], // always use === / !==
-
     // ── React ────────────────────────────────────────────────────────────────
     "react/jsx-no-target-blank": "error", // security: target=_blank + opener
-    "react/self-closing-comp": "warn", // <Foo /> instead of <Foo></Foo>
-
+    "react/self-closing-comp": "off", // <Foo /> instead of <Foo></Foo>
+    "react/react-in-jsx-scope": "off", // React 17+ doesn't require React in scope
     // ── React Hooks ──────────────────────────────────────────────────────────
     "react-hooks/rules-of-hooks": "error", // hooks must follow the rules
     "react-hooks/exhaustive-deps": "warn", // deps arrays must be complete
-
     // ── TypeScript ───────────────────────────────────────────────────────────
     "@typescript-eslint/no-explicit-any": "warn", // avoid escaping types
     "@typescript-eslint/no-non-null-assertion": "warn", // avoid unsafe !
-
     // ── Imports ──────────────────────────────────────────────────────────────
     "import/no-duplicates": "error", // merge duplicate import statements
     "import/no-self-import": "error" // a module cannot import itself
@@ -46,5 +43,5 @@
   },
   "env": { "browser": true, "es2020": true, "builtin": true },
   "globals": {},
-  "ignorePatterns": ["dist/", "target/", "src-tauri/"]
+  "ignorePatterns": ["dist/", "target/", "src-tauri/", "src/routeTree.gen.ts"]
 }
