@@ -12,7 +12,9 @@ fn cache() -> &'static Mutex<HashMap<String, String>> {
 /// Returns an empty string on any failure or if `exe_path` is empty.
 /// Results are cached in memory for the lifetime of the process.
 pub fn get_icon_base64_from_path(exe_path: &str) -> String {
-    if exe_path.is_empty() { return String::new(); }
+    if exe_path.is_empty() {
+        return String::new();
+    }
 
     if let Some(hit) = cache().lock().unwrap().get(exe_path).cloned() {
         return hit;
@@ -46,7 +48,6 @@ fn extract_icon_base64(exe_path: &str) -> Option<String> {
         .collect();
 
     unsafe {
-        // ── 1. Get HICON from the exe via SHGetFileInfoW ──────────────────────
         let mut shfi: SHFILEINFOW = zeroed();
         let r = SHGetFileInfoW(
             wide.as_ptr(),
@@ -60,18 +61,15 @@ fn extract_icon_base64(exe_path: &str) -> Option<String> {
         }
         let hicon = shfi.hIcon;
 
-        // ── 2. Decompose HICON into bitmap handles ────────────────────────────
         let mut icon_info: ICONINFO = zeroed();
         let got_info = GetIconInfo(hicon, &mut icon_info) != 0;
 
-        // Extract pixel data, then clean up regardless of success/failure.
         let result = if got_info && !icon_info.hbmColor.is_null() {
             do_extract(icon_info.hbmColor)
         } else {
             None
         };
 
-        // Cleanup – null checks protect against partially-initialised structs
         DestroyIcon(hicon);
         if got_info {
             if !icon_info.hbmColor.is_null() {
@@ -89,13 +87,11 @@ fn extract_icon_base64(exe_path: &str) -> Option<String> {
 #[cfg(target_os = "windows")]
 unsafe fn do_extract(hbm_color: winapi::shared::windef::HBITMAP) -> Option<String> {
     use std::mem::{size_of, zeroed};
-
     use winapi::um::wingdi::{
-        CreateCompatibleDC, DeleteDC, GetDIBits, GetObjectW, BITMAP, BITMAPINFO,
-        BITMAPINFOHEADER, DIB_RGB_COLORS, BI_RGB,
+        CreateCompatibleDC, DeleteDC, GetDIBits, GetObjectW, BI_RGB, BITMAP, BITMAPINFO,
+        BITMAPINFOHEADER, DIB_RGB_COLORS,
     };
 
-    // ── Get bitmap dimensions ──────────────────────────────────────────────
     let mut bmp: BITMAP = zeroed();
     if GetObjectW(
         hbm_color as *mut _,
@@ -112,7 +108,6 @@ unsafe fn do_extract(hbm_color: winapi::shared::windef::HBITMAP) -> Option<Strin
         return None;
     }
 
-    // ── Pull raw BGRA pixels via GetDIBits ─────────────────────────────────
     let dc = CreateCompatibleDC(std::ptr::null_mut());
     if dc.is_null() {
         return None;
@@ -121,7 +116,7 @@ unsafe fn do_extract(hbm_color: winapi::shared::windef::HBITMAP) -> Option<Strin
     let mut bmi: BITMAPINFO = zeroed();
     bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
     bmi.bmiHeader.biWidth = width as i32;
-    bmi.bmiHeader.biHeight = -(height as i32); // negative → top-down scanlines
+    bmi.bmiHeader.biHeight = -(height as i32);
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
@@ -142,16 +137,14 @@ unsafe fn do_extract(hbm_color: winapi::shared::windef::HBITMAP) -> Option<Strin
         return None;
     }
 
-    // ── BGRA → RGBA + alpha fixup for old-style (opaque) icons ────────────
     let has_alpha = pixels.chunks_exact(4).any(|p| p[3] != 0);
     for px in pixels.chunks_exact_mut(4) {
         px.swap(0, 2); // B ↔ R
         if !has_alpha {
-            px[3] = 255; // legacy icon: force fully opaque
+            px[3] = 255;
         }
     }
 
-    // ── PNG encode ─────────────────────────────────────────────────────────
     let mut png_bytes: Vec<u8> = Vec::new();
     {
         let mut enc = png::Encoder::new(&mut png_bytes, width, height);
@@ -161,7 +154,6 @@ unsafe fn do_extract(hbm_color: winapi::shared::windef::HBITMAP) -> Option<Strin
         writer.write_image_data(&pixels).ok()?;
     }
 
-    // ── Base64 encode ──────────────────────────────────────────────────────
     use base64::Engine as _;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
     Some(format!("data:image/png;base64,{}", b64))

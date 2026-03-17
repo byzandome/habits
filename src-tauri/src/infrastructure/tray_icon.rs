@@ -1,4 +1,5 @@
-static APP_ICON_BYTES: &[u8] = include_bytes!("../icons/32x32.png");
+// Path is relative to this file: src/infrastructure/ → src-tauri/icons/
+static APP_ICON_BYTES: &[u8] = include_bytes!("../../icons/32x32.png");
 
 /// Decodes the embedded 32×32 app icon PNG into RGBA pixels.
 fn load_app_icon_rgba() -> (Vec<u8>, u32, u32) {
@@ -18,7 +19,6 @@ fn load_app_icon_rgba() -> (Vec<u8>, u32, u32) {
     let mut buf = vec![0u8; buf_size];
     reader.next_frame(&mut buf).expect("valid PNG frame");
 
-    // Ensure we always return RGBA
     let rgba = match color_type {
         png::ColorType::Rgba => buf,
         png::ColorType::Rgb => buf
@@ -31,13 +31,11 @@ fn load_app_icon_rgba() -> (Vec<u8>, u32, u32) {
     (rgba, width, height)
 }
 
-/// Composites a small solid-colour badge circle at the **top-right** corner of
-/// the app icon to indicate the current status.
+/// Composites a small solid-colour badge circle at the bottom-right corner of
+/// the app icon to indicate the current tracker status.
 pub fn make_tray_icon_with_badge(r: u8, g: u8, b: u8) -> tauri::image::Image<'static> {
     let (mut pixels, width, height) = load_app_icon_rgba();
 
-    // Badge: 16 px diameter (8 px radius), bottom-right corner (Teams style).
-    // 2 px white border around it for contrast and visibility.
     let badge_radius: f32 = 8.0;
     let border_width: f32 = 2.0;
     let outer_radius = badge_radius + border_width;
@@ -50,7 +48,6 @@ pub fn make_tray_icon_with_badge(r: u8, g: u8, b: u8) -> tauri::image::Image<'st
             let dy = py as f32 - badge_cy;
             let dist = (dx * dx + dy * dy).sqrt();
 
-            // Outside everything — skip.
             if dist > outer_radius + 1.0 {
                 continue;
             }
@@ -58,28 +55,36 @@ pub fn make_tray_icon_with_badge(r: u8, g: u8, b: u8) -> tauri::image::Image<'st
             let idx = ((py * width + px) * 4) as usize;
             let ea = pixels[idx + 3] as f32 / 255.0;
 
-            // White border ring (outer_radius down to badge_radius).
             if dist > badge_radius - 0.5 {
                 let border_alpha = ((outer_radius - dist + 1.0).clamp(0.0, 1.0) * 255.0) as u8;
-                if border_alpha == 0 { continue; }
+                if border_alpha == 0 {
+                    continue;
+                }
                 let ba = border_alpha as f32 / 255.0;
                 let out_a = ba + ea * (1.0 - ba);
                 if out_a > 0.0 {
-                    pixels[idx]     = ((255.0_f32 * ba + pixels[idx]     as f32 * ea * (1.0 - ba)) / out_a) as u8;
-                    pixels[idx + 1] = ((255.0_f32 * ba + pixels[idx + 1] as f32 * ea * (1.0 - ba)) / out_a) as u8;
-                    pixels[idx + 2] = ((255.0_f32 * ba + pixels[idx + 2] as f32 * ea * (1.0 - ba)) / out_a) as u8;
+                    pixels[idx] =
+                        ((255.0_f32 * ba + pixels[idx] as f32 * ea * (1.0 - ba)) / out_a) as u8;
+                    pixels[idx + 1] = ((255.0_f32 * ba + pixels[idx + 1] as f32 * ea * (1.0 - ba))
+                        / out_a) as u8;
+                    pixels[idx + 2] = ((255.0_f32 * ba + pixels[idx + 2] as f32 * ea * (1.0 - ba))
+                        / out_a) as u8;
                     pixels[idx + 3] = (out_a * 255.0) as u8;
                 }
             } else {
-                // Coloured fill inside the border.
                 let badge_alpha = ((badge_radius - dist + 1.0).clamp(0.0, 1.0) * 255.0) as u8;
-                if badge_alpha == 0 { continue; }
+                if badge_alpha == 0 {
+                    continue;
+                }
                 let ba = badge_alpha as f32 / 255.0;
                 let out_a = ba + ea * (1.0 - ba);
                 if out_a > 0.0 {
-                    pixels[idx]     = ((r as f32 * ba + pixels[idx]     as f32 * ea * (1.0 - ba)) / out_a) as u8;
-                    pixels[idx + 1] = ((g as f32 * ba + pixels[idx + 1] as f32 * ea * (1.0 - ba)) / out_a) as u8;
-                    pixels[idx + 2] = ((b as f32 * ba + pixels[idx + 2] as f32 * ea * (1.0 - ba)) / out_a) as u8;
+                    pixels[idx] =
+                        ((r as f32 * ba + pixels[idx] as f32 * ea * (1.0 - ba)) / out_a) as u8;
+                    pixels[idx + 1] = ((g as f32 * ba + pixels[idx + 1] as f32 * ea * (1.0 - ba))
+                        / out_a) as u8;
+                    pixels[idx + 2] = ((b as f32 * ba + pixels[idx + 2] as f32 * ea * (1.0 - ba))
+                        / out_a) as u8;
                     pixels[idx + 3] = (out_a * 255.0) as u8;
                 }
             }
@@ -94,7 +99,7 @@ pub fn productive_icon() -> tauri::image::Image<'static> {
     make_tray_icon_with_badge(34, 197, 94)
 }
 
-/// App icon + yellow badge (Tailwind yellow-500) — shown while the tracker is idle / suspended.
+/// App icon + yellow badge (Tailwind yellow-500) — shown while idle / suspended.
 pub fn idle_icon() -> tauri::image::Image<'static> {
     make_tray_icon_with_badge(234, 179, 8)
 }

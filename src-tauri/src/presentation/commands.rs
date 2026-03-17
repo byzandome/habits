@@ -2,9 +2,15 @@ use chrono::{Local, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::{db, AppState};
+use crate::{
+    domain::{
+        entities::TrackerState,
+        ports::{AppUsageRepository, SessionRepository, SettingsRepository},
+    },
+    AppState,
+};
 
-// ── Response types ────────────────────────────────────────────────────────────
+// ── Response / request types ──────────────────────────────────────────────────
 
 #[derive(Serialize)]
 pub struct CurrentStatus {
@@ -25,14 +31,24 @@ pub struct Settings {
     pub autostart: bool,
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+fn tracker_snapshot(t: &TrackerState) -> (i64, i64, i64, chrono::DateTime<Utc>) {
+    (
+        t.current_active_secs,
+        t.current_idle_secs,
+        t.current_locked_secs,
+        t.session_start,
+    )
+}
+
 // ── Commands ──────────────────────────────────────────────────────────────────
 
-/// Returns the current tracking status and how many seconds the current session has lasted.
+/// Returns the current tracking status and elapsed seconds of the current
+/// session so the UI can display a live running clock.
 #[tauri::command]
 pub fn get_current_status(state: State<'_, AppState>) -> Result<CurrentStatus, String> {
     let t = state.tracker.lock().unwrap();
-    // session_duration_secs shows the total elapsed time of the current app
-    // session (active + idle combined) so the UI can display a running clock.
     let duration = (Utc::now() - t.session_start).num_seconds().max(0)
         + t.current_active_secs
         + t.current_idle_secs;
@@ -42,30 +58,25 @@ pub fn get_current_status(state: State<'_, AppState>) -> Result<CurrentStatus, S
     })
 }
 
-/// Returns today's cumulative productive and idle seconds (including in-progress session).
+/// Returns today's cumulative productive, idle, and locked seconds (including
+/// the in-progress session).
 #[tauri::command]
 pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String> {
     let local_today = Local::now().format("%Y-%m-%d").to_string();
-
-    // Snapshot in-progress counters before releasing the lock.
     let (cur_active, cur_idle, cur_locked, session_start) = {
         let t = state.tracker.lock().unwrap();
-        (t.current_active_secs, t.current_idle_secs, t.current_locked_secs, t.session_start)
+        tracker_snapshot(&t)
     };
 
-    let (mut prod, mut idle, mut locked) = {
-        let conn = state.db.lock().unwrap();
-        db::get_today_stats(&conn, &local_today).map_err(|e| e.to_string())?
-    };
+    let (mut prod, mut idle, mut locked) = state.db.get_today_stats(&local_today)?;
 
-    // Add the in-progress session's counters if it started today (local).
     let session_local_date = session_start
         .with_timezone(&Local)
         .format("%Y-%m-%d")
         .to_string();
     if session_local_date == local_today {
-        prod   += cur_active;
-        idle   += cur_idle;
+        prod += cur_active;
+        idle += cur_idle;
         locked += cur_locked;
     }
 
@@ -81,40 +92,31 @@ pub fn get_today_stats(state: State<'_, AppState>) -> Result<TodayStats, String>
 pub fn get_sessions_for_date(
     state: State<'_, AppState>,
     date: String,
-) -> Result<Vec<db::Session>, String> {
+) -> Result<Vec<crate::domain::entities::Session>, String> {
     let local_today = Local::now().format("%Y-%m-%d").to_string();
-
-    // Snapshot tracker
     let (cur_active, cur_idle, cur_locked, session_start) = {
         let t = state.tracker.lock().unwrap();
-        (t.current_active_secs, t.current_idle_secs, t.current_locked_secs, t.session_start)
+        tracker_snapshot(&t)
     };
 
-    let mut sessions = {
-        let conn = state.db.lock().unwrap();
-        db::get_sessions_for_date(&conn, &date).map_err(|e| e.to_string())?
-    };
+    let mut sessions = state.db.get_sessions_for_date(&date)?;
 
-    // Append in-progress session when querying today
     if date == local_today {
         let session_local_date = session_start
             .with_timezone(&Local)
             .format("%Y-%m-%d")
             .to_string();
         if session_local_date == local_today {
-            // Remove the placeholder row (if any) inserted by begin_session and
-            // replace it with a live view that has up-to-date counters.
-            sessions.retain(|s| s.end_time != "");
-            sessions.push(db::Session {
+            sessions.retain(|s| !s.end_time.is_empty());
+            sessions.push(crate::domain::entities::Session {
                 id: -1,
-                start_time: session_start
-                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                end_time: String::new(), // empty = in-progress
+                start_time: session_start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                end_time: String::new(),
                 active_secs: cur_active,
                 idle_secs: cur_idle,
                 locked_secs: cur_locked,
             });
-            sessions.sort_by(|a, b| b.start_time.cmp(&a.start_time)); // newest first
+            sessions.sort_by(|a, b| b.start_time.cmp(&a.start_time));
         }
     }
 
@@ -126,9 +128,8 @@ pub fn get_sessions_for_date(
 pub fn get_history(
     state: State<'_, AppState>,
     days: Option<u32>,
-) -> Result<Vec<db::DailySummary>, String> {
-    let conn = state.db.lock().unwrap();
-    db::get_history(&conn, days.unwrap_or(7)).map_err(|e| e.to_string())
+) -> Result<Vec<crate::domain::entities::DailySummary>, String> {
+    state.db.get_history(days.unwrap_or(7))
 }
 
 /// Returns current app settings.
@@ -137,10 +138,9 @@ pub fn get_settings(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<Settings, String> {
-    let conn = state.db.lock().unwrap();
-
-    let threshold_mins = db::get_setting(&conn, "idle_threshold_mins")
-        .ok()
+    let threshold_mins = state
+        .db
+        .get_setting("idle_threshold_mins")?
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(5);
 
@@ -158,43 +158,38 @@ pub fn get_settings(
 pub fn get_app_usage(
     state: State<'_, AppState>,
     date: String,
-) -> Result<Vec<db::AppUsageStat>, String> {
-    let conn = state.db.lock().unwrap();
-    db::get_app_usage_for_date(&conn, &date).map_err(|e| e.to_string())
+) -> Result<Vec<crate::domain::entities::AppUsageStat>, String> {
+    state.db.get_app_usage_for_date(&date)
 }
 
 /// Returns a `"data:image/png;base64,…"` string for the given process stem,
-/// or an empty string when the exe path is unknown (frontend shows placeholder).
+/// or an empty string when the exe path is unknown.
 #[tauri::command]
 pub fn get_app_icon(app_name: String, state: State<'_, AppState>) -> String {
-    let conn = state.db.lock().unwrap();
-    let exe_path = crate::db::get_exe_path_for_app(&conn, &app_name)
+    let exe_path = state
+        .db
+        .get_exe_path_for_app(&app_name)
         .ok()
         .flatten()
         .unwrap_or_default();
-    crate::app_icon::get_icon_base64_from_path(&exe_path)
+    crate::infrastructure::app_icon::get_icon_base64_from_path(&exe_path)
 }
 
-/// Clears all cached exe paths stored in the DB so icons are re-resolved on
-/// the next request.  The frontend module-level icon cache is not accessible
-/// from Rust, so the frontend is responsible for clearing it after this call.
+/// Clears all cached exe paths so icons are re-resolved on the next request.
 #[tauri::command]
 pub fn clear_icon_cache(state: State<'_, AppState>) -> Result<(), String> {
-    let conn = state.db.lock().unwrap();
-    crate::db::clear_exe_path_cache(&conn).map_err(|e| e.to_string())?;
-    crate::app_icon::clear_in_memory_cache();
+    state.db.clear_exe_path_cache()?;
+    crate::infrastructure::app_icon::clear_in_memory_cache();
     Ok(())
 }
 
 /// Deletes all recorded sessions and app-usage data, preserving settings.
-/// The tracker keeps running normally; a fresh session begins on the next poll.
 #[tauri::command]
 pub fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
-    let conn = state.db.lock().unwrap();
-    crate::db::clear_all_data(&conn).map_err(|e| e.to_string())
+    state.db.clear_all_data()
 }
 
-/// Persists settings and applies them immediately.
+/// Persists settings and applies them immediately (threshold + OS autostart).
 #[tauri::command]
 pub fn set_settings(
     state: State<'_, AppState>,
@@ -202,22 +197,18 @@ pub fn set_settings(
     idle_threshold_mins: u64,
     autostart: bool,
 ) -> Result<(), String> {
-    // Update live threshold
     {
         let mut t = state.tracker.lock().unwrap();
         t.idle_threshold_secs = idle_threshold_mins * 60;
     }
 
-    // Persist to DB
-    {
-        let conn = state.db.lock().unwrap();
-        db::set_setting(&conn, "idle_threshold_mins", &idle_threshold_mins.to_string())
-            .map_err(|e| e.to_string())?;
-        db::set_setting(&conn, "autostart", &autostart.to_string())
-            .map_err(|e| e.to_string())?;
-    }
+    state
+        .db
+        .set_setting("idle_threshold_mins", &idle_threshold_mins.to_string())?;
+    state
+        .db
+        .set_setting("autostart", &autostart.to_string())?;
 
-    // Toggle OS autostart
     use tauri_plugin_autostart::ManagerExt;
     if autostart {
         app.autolaunch().enable().map_err(|e| e.to_string())?;

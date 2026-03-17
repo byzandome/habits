@@ -77,10 +77,6 @@ pub fn is_session_locked() -> bool {
 /// session-change events (`Win+L`, lock screen) and keeps `SESSION_LOCKED`
 /// up to date.
 ///
-/// `OpenInputDesktop` is NOT used here because on Windows 10/11 the lock
-/// screen runs as a UWP app on the same desktop, so the desktop name never
-/// changes — making that API unreliable for lock detection.
-///
 /// Must be called once during application startup.
 pub fn start_session_monitor() {
     #[cfg(target_os = "windows")]
@@ -100,13 +96,11 @@ unsafe fn run_session_monitor() {
     use winapi::shared::windef::HWND;
     use winapi::um::libloaderapi::GetModuleHandleW;
     use winapi::um::winuser::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW,
-        RegisterClassExW, TranslateMessage, MSG, WNDCLASSEXW,
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassExW,
+        TranslateMessage, MSG, WNDCLASSEXW,
     };
 
-    // WM_WTSSESSION_CHANGE = 0x02B1  (from WinUser.h)
     const WM_WTSSESSION_CHANGE: UINT = 0x02B1;
-    // wParam values for WM_WTSSESSION_CHANGE (from Wtsapi32.h)
     const WTS_SESSION_LOCK: WPARAM = 7;
     const WTS_SESSION_UNLOCK: WPARAM = 8;
 
@@ -120,11 +114,15 @@ unsafe fn run_session_monitor() {
             match wparam {
                 WTS_SESSION_LOCK => {
                     SESSION_LOCKED.store(true, Ordering::Relaxed);
-                    if let Some(w) = TRACKER_WAKE.get() { w.notify_one(); }
+                    if let Some(w) = TRACKER_WAKE.get() {
+                        w.notify_one();
+                    }
                 }
                 WTS_SESSION_UNLOCK => {
                     SESSION_LOCKED.store(false, Ordering::Relaxed);
-                    if let Some(w) = TRACKER_WAKE.get() { w.notify_one(); }
+                    if let Some(w) = TRACKER_WAKE.get() {
+                        w.notify_one();
+                    }
                 }
                 _ => {}
             }
@@ -142,14 +140,16 @@ unsafe fn run_session_monitor() {
     wc.lpszClassName = class_name.as_ptr();
     RegisterClassExW(&wc);
 
-    // HWND_MESSAGE (-3isize) creates a message-only window — no visible UI,
-    // no taskbar entry, just a handle that can receive posted messages.
+    // HWND_MESSAGE (-3isize) creates a message-only window.
     let hwnd = CreateWindowExW(
         0,
         class_name.as_ptr(),
         class_name.as_ptr(),
         0,
-        0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
         (-3isize) as HWND, // HWND_MESSAGE
         std::ptr::null_mut(),
         hmod,
@@ -160,14 +160,10 @@ unsafe fn run_session_monitor() {
         return;
     }
 
-    // Ask Windows to post WM_WTSSESSION_CHANGE to this window.
     if WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) == 0 {
-        // Registration failed — lock detection unavailable; SESSION_LOCKED
-        // stays false and the tracker will treat everything as idle.
         return;
     }
 
-    // Standard Win32 message loop — runs until the process exits.
     let mut msg: MSG = std::mem::zeroed();
     while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) != 0 {
         TranslateMessage(&msg);

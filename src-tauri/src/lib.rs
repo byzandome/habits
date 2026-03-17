@@ -1,10 +1,7 @@
-mod app_icon;
-mod commands;
-mod db;
-mod idle;
-mod tracker;
-mod active_app;
-mod tray_icon;
+mod application;
+mod domain;
+mod infrastructure;
+mod presentation;
 
 use std::sync::{Arc, Mutex};
 
@@ -17,11 +14,17 @@ use tauri::{
 };
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+use domain::entities::TrackerState;
+use domain::ports::{SessionRepository, SettingsRepository};
+use infrastructure::db::SqliteDb;
+
 // ── Shared application state ──────────────────────────────────────────────────
 
+/// Holds the concrete implementations injected at startup.
+/// Commands receive this via Tauri's managed-state mechanism.
 pub struct AppState {
-    pub db: Arc<Mutex<Connection>>,
-    pub tracker: Arc<Mutex<tracker::TrackerShared>>,
+    pub db: Arc<SqliteDb>,
+    pub tracker: Arc<Mutex<TrackerState>>,
 }
 
 // Arc<Mutex<T>> is Send + Sync when T: Send, so Tauri can hold AppState safely.
@@ -31,8 +34,8 @@ pub struct AppState {
 // ── Database migrations ─────────────────────────────────────────────────────
 //
 // SQL lives in database/migrations/.  Naming convention:
-//   V{version}__{description}.up.sql   — applied going forward
-//   V{version}__{description}.down.sql — applied when rolling back (optional)
+//   V{version}__{description}/up.sql   — applied going forward
+//   V{version}__{description}/down.sql — applied when rolling back (optional)
 //
 // RULES:
 //   - Never modify or remove an existing file/entry once it has been deployed.
@@ -44,7 +47,7 @@ fn db_migrations() -> Vec<Migration> {
         Migration {
             version: 1,
             description: "create_initial_schema",
-            sql: include_str!("../database/migrations/V1__create_initial_schema.up.sql"),
+            sql: include_str!("../database/migrations/V1__create_initial_schema/up.sql"),
             kind: MigrationKind::Up,
         },
         // ── Add future migrations here ────────────────────────────────────────
@@ -87,15 +90,20 @@ pub fn run() {
             let db_path = app_data_dir.join("habits.db");
             let conn = Connection::open(&db_path).expect("failed to open SQLite database");
 
-            // Load persisted settings
-            let threshold_mins: u64 = db::get_setting(&conn, "idle_threshold_mins")
+            // Wrap connection in the repository implementation.
+            let db = Arc::new(SqliteDb::new(conn));
+
+            // Load persisted settings via the SettingsRepository port.
+            let threshold_mins: u64 = db
+                .get_setting("idle_threshold_mins")
                 .ok()
+                .flatten()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(5);
 
             // ── Tracker initial state ─────────────────────────────────────────
             let now = Utc::now();
-            let idle_secs = idle::get_idle_seconds();
+            let idle_secs = infrastructure::idle::get_idle_seconds();
             let threshold_secs = threshold_mins * 60;
 
             let initial_status = if idle_secs >= threshold_secs {
@@ -104,11 +112,12 @@ pub fn run() {
                 "productive"
             };
 
-            // Open the first app session in the DB.
-            let initial_session_id = db::begin_session(&conn, &now)
+            // Open the first app session via the SessionRepository port.
+            let initial_session_id = db
+                .begin_session(&now)
                 .expect("failed to create initial session");
 
-            let tracker_shared = tracker::TrackerShared {
+            let tracker_state = TrackerState {
                 status: initial_status.to_string(),
                 session_start: now,
                 idle_threshold_secs: threshold_secs,
@@ -118,40 +127,41 @@ pub fn run() {
                 current_locked_secs: 0,
             };
 
-            let app_state = AppState {
-                db: Arc::new(Mutex::new(conn)),
-                tracker: Arc::new(Mutex::new(tracker_shared)),
-            };
+            let tracker = Arc::new(Mutex::new(tracker_state));
 
-            // Clone Arcs so the bg-task keeps its own references
-            let bg_db = Arc::clone(&app_state.db);
-            let bg_tracker = Arc::clone(&app_state.tracker);
+            // Clone Arcs so the background task keeps its own references.
+            let bg_session_repo = Arc::clone(&db) as Arc<dyn domain::ports::SessionRepository>;
+            let bg_app_usage_repo =
+                Arc::clone(&db) as Arc<dyn domain::ports::AppUsageRepository>;
+            let bg_tracker = Arc::clone(&tracker);
 
-            app.manage(app_state);
+            app.manage(AppState { db, tracker });
 
             // ── Session lock monitor (WTS notifications) ──────────────────────
-            // The wake notify lets the WTS thread poke the tracker loop the
-            // instant a lock / unlock event fires, so status changes appear in
-            // the UI almost immediately instead of waiting up to 5 s.
-            let wake = std::sync::Arc::new(tokio::sync::Notify::new());
-            idle::set_tracker_wake(std::sync::Arc::clone(&wake));
-            idle::start_session_monitor();
+            let wake = Arc::new(tokio::sync::Notify::new());
+            infrastructure::idle::set_tracker_wake(Arc::clone(&wake));
+            infrastructure::idle::start_session_monitor();
 
             // ── Background tracking task ──────────────────────────────────────
-            tauri::async_runtime::spawn(tracker::run_tracker(bg_db, bg_tracker, app.handle().clone(), wake));
+            tauri::async_runtime::spawn(application::tracker::run_tracker(
+                bg_session_repo,
+                bg_app_usage_repo,
+                bg_tracker,
+                app.handle().clone(),
+                wake,
+            ));
 
             // ── System tray ───────────────────────────────────────────────────
             let show_item =
                 MenuItem::with_id(app, "show", "Show Habits", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
-            let quit_item =
-                MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &sep, &quit_item])?;
 
             let initial_tray_icon = if initial_status == "productive" {
-                tray_icon::productive_icon()
+                infrastructure::tray_icon::productive_icon()
             } else {
-                tray_icon::idle_icon()
+                infrastructure::tray_icon::idle_icon()
             };
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(initial_tray_icon)
@@ -200,20 +210,23 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::get_current_status,
-            commands::get_today_stats,
-            commands::get_sessions_for_date,
-            commands::get_history,
-            commands::get_settings,
-            commands::set_settings,
-            commands::get_app_usage,
-            commands::get_app_icon,
-            commands::clear_icon_cache,
-            commands::clear_all_data,
+            presentation::commands::get_current_status,
+            presentation::commands::get_today_stats,
+            presentation::commands::get_sessions_for_date,
+            presentation::commands::get_history,
+            presentation::commands::get_settings,
+            presentation::commands::set_settings,
+            presentation::commands::get_app_usage,
+            presentation::commands::get_app_icon,
+            presentation::commands::clear_icon_cache,
+            presentation::commands::clear_all_data,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            // RunEvent::Exit fires on every exit path:
+            //   • tray Quit → app.exit(0)
+            //   • Windows shutdown / logoff (WM_ENDSESSION)
             // RunEvent::Exit fires on every exit path:
             //   • tray Quit → app.exit(0)
             //   • Windows shutdown / logoff (WM_ENDSESSION)
@@ -224,12 +237,15 @@ pub fn run() {
                 let state = app_handle.state::<AppState>();
                 let (session_id, active_secs, idle_secs, locked_secs) = {
                     let t = state.tracker.lock().unwrap();
-                    (t.current_session_id, t.current_active_secs, t.current_idle_secs, t.current_locked_secs)
+                    (
+                        t.current_session_id,
+                        t.current_active_secs,
+                        t.current_idle_secs,
+                        t.current_locked_secs,
+                    )
                 };
-                if let Ok(conn) = state.db.lock() {
-                    let _ = db::update_session_time(&conn, session_id, active_secs, idle_secs, locked_secs);
-                    let _ = db::end_session(&conn, session_id, &now);
-                };
+                let _ = state.db.update_session_time(session_id, active_secs, idle_secs, locked_secs);
+                let _ = state.db.end_session(session_id, &now);
             }
         });
 }

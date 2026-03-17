@@ -9,7 +9,10 @@ pub struct ActiveApp {
 
 impl ActiveApp {
     fn unknown() -> Self {
-        ActiveApp { name: "Unknown".to_string(), exe_path: String::new() }
+        ActiveApp {
+            name: "Unknown".to_string(),
+            exe_path: String::new(),
+        }
     }
 }
 
