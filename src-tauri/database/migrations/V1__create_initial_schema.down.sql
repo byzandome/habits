@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS app_usage;
+DROP TABLE IF EXISTS settings;
+DROP TABLE IF EXISTS sessions;

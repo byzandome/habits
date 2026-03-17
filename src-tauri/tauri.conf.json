@@ -24,6 +24,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:habits.db"]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "nsis",

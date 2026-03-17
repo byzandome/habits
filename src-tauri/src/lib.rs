@@ -15,6 +15,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 // ── Shared application state ──────────────────────────────────────────────────
 
@@ -27,9 +28,43 @@ pub struct AppState {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+// ── Database migrations ─────────────────────────────────────────────────────
+//
+// SQL lives in database/migrations/.  Naming convention:
+//   V{version}__{description}.up.sql   — applied going forward
+//   V{version}__{description}.down.sql — applied when rolling back (optional)
+//
+// RULES:
+//   - Never modify or remove an existing file/entry once it has been deployed.
+//   - To change the schema, add a new Vn__ pair and append a Migration below.
+//   - Up migrations run inside a transaction; a failure rolls back the whole set.
+//   - Down migrations are opt-in and never run automatically by the plugin.
+fn db_migrations() -> Vec<Migration> {
+    vec![
+        Migration {
+            version: 1,
+            description: "create_initial_schema",
+            sql: include_str!("../database/migrations/V1__create_initial_schema.up.sql"),
+            kind: MigrationKind::Up,
+        },
+        // ── Add future migrations here ────────────────────────────────────────
+        // Migration {
+        //     version: 2,
+        //     description: "example_add_column",
+        //     sql: include_str!("../database/migrations/V2__example_add_column.up.sql"),
+        //     kind: MigrationKind::Up,
+        // },
+    ]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:habits.db", db_migrations())
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // A second instance was launched — bring the existing window to focus
             if let Some(win) = app.get_webview_window("main") {
@@ -51,8 +86,6 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir)?;
             let db_path = app_data_dir.join("habits.db");
             let conn = Connection::open(&db_path).expect("failed to open SQLite database");
-            db::init_db(&conn).expect("failed to initialise database schema");
-            db::migrate_db(&conn).expect("failed to migrate database schema");
 
             // Load persisted settings
             let threshold_mins: u64 = db::get_setting(&conn, "idle_threshold_mins")
