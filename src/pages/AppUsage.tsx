@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '../api';
-import { getDisplayName, getFallbackDomain } from '../appMeta';
+import { getDisplayName, getFallbackDomain } from '../app.meta';
 
 // ── Module-level icon cache (survives re-renders, cleared on page refresh) ───
 export const iconCache = new Map<string, string | null>();

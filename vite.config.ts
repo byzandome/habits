@@ -1,21 +1,29 @@
+import { intlayer } from "vite-intlayer";
 import tailwindcss from '@tailwindcss/vite';
-import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
+import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
-    TanStackRouterVite({
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: true,
       routesDirectory: 'src/routes',
       generatedRouteTree: 'src/routeTree.gen.ts',
     }),
     react(),
     tailwindcss(),
+    intlayer()
   ],
+  resolve: {
+    alias: {
+      '@': '/src',
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

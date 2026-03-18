@@ -6,21 +6,6 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ── Reset ─────────────────────────────────────────────────────────────────── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  background: #0d0d0f;
-  color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
-}
 
 /* ── App shell ──────────────────────────────────────────────────────────────── */
 .app-shell {
@@ -203,60 +188,6 @@ body {
   color: #64748b;
   margin-top: 4px;
 }
-
-/* ── Status badge (header) ──────────────────────────────────────────────────── */
-.status-badge {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px 8px 12px;
-  border-radius: 24px;
-  border: 1px solid;
-}
-
-.status-badge--productive {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.25);
-}
-.status-badge--idle {
-  background: rgba(100, 116, 139, 0.08);
-  border-color: rgba(100, 116, 139, 0.2);
-}
-.status-badge--locked {
-  background: rgba(245, 158, 11, 0.08);
-  border-color: rgba(245, 158, 11, 0.25);
-}
-
-.badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #475569;
-  flex-shrink: 0;
-}
-
-.badge-dot--active {
-  background: #22c55e;
-  animation: dot-pulse 2s ease-in-out infinite;
-}
-
-.badge-dot--locked {
-  background: #f59e0b;
-}
-
-.badge-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #f8fafc;
-  margin-right: 8px;
-}
-
-.badge-timer {
-  font-size: 12px;
-  color: #64748b;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ── Card base ──────────────────────────────────────────────────────────────── */
 .card {
   background: #111115;
@@ -691,6 +622,12 @@ body {
   --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
   --sidebar-border: oklch(0.925 0.005 214.3);
   --sidebar-ring: oklch(0.723 0.014 214.4);
+  --productive: oklch(0.596 0.145 163.225);
+  --productive-foreground: oklch(0.979 0.021 166.113);
+  --idle: oklch(47.478% 0.00005 271.152);
+  --idle-foreground: oklch(0.979 0.021 166.113);
+  --locked: oklch(65.143% 0.12417 69.057);
+  --locked-foreground: oklch(0.979 0.021 166.113);
 }
 
 .dark {
@@ -725,6 +662,12 @@ body {
   --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.56 0.021 213.5);
+  --productive: oklch(69.544% 0.17649 152.982);
+  --productive-foreground: oklch(0.979 0.021 166.113);
+  --idle: oklch(47.478% 0.00005 271.152);
+  --idle-foreground: oklch(0.979 0.021 166.113);
+  --locked: oklch(65.143% 0.12417 69.057);
+  --locked-foreground: oklch(0.979 0.021 166.113);
 }
 
 @theme inline {
@@ -767,6 +710,12 @@ body {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --color-productive: var(--productive);
+  --color-productive-foreground: var(--productive-foreground);
+  --color-idle: var(--idle);
+  --color-idle-foreground: var(--idle-foreground);
+  --color-locked: var(--locked);
+  --color-locked-foreground: var(--locked-foreground);
 }
 
 @layer base {

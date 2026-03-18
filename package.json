@@ -36,10 +36,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "intlayer": "^8.4.0",
     "lucide-react": "^0.577.0",
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-intlayer": "^8.4.0",
     "recharts": "^3.8.0",
     "shadcn": "^4.0.8",
     "tailwind-merge": "^3.5.0",
@@ -50,6 +52,7 @@
   "devDependencies": {
     "@tanstack/router-plugin": "^1.166.12",
     "@tauri-apps/cli": "^2",
+    "@types/node": "^25.5.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
@@ -57,7 +60,8 @@
     "oxlint": "^1.56.0",
     "rimraf": "^6.1.3",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vite-intlayer": "^8.4.0"
   },
   "readme": "https://github.com/byzandome/habits/readme"
 }

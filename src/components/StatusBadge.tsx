@@ -1,37 +1,42 @@
-interface Props {
-  status: 'productive' | 'idle' | 'locked';
-  sessionDurationSecs: number;
+import { STATUSES, type Status } from "@/constants/Status";
+import { formatCurrentDistanceDateToNow } from "@/utils/date";
+import { cn } from "@/utils/theme";
+import { useMemo } from "react";
+
+type StatusBadgeProps = {
+  status: Status;
+  startSessionDate: Date;
 }
 
-function formatDuration(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
-  if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
-  return `${s}s`;
-}
+export function StatusBadge({ status }: StatusBadgeProps) {
+  const isProductive = useMemo(() => status === STATUSES.PRODUCTIVE, [status]);
+  const isLocked = useMemo(() => status === STATUSES.LOCKED, [status]);
+  const isIdle = useMemo(() => status === STATUSES.IDLE, [status]);
 
-export function StatusBadge({ status, sessionDurationSecs }: Props) {
-  const isProductive = status === 'productive';
-  const isLocked = status === 'locked';
+  const label = useMemo(() => {
+    if (isProductive) return 'Productive';
+    if (isLocked) return 'Locked';
+    if (isIdle) return 'Idle';
+    return 'Unknown';
+  }, [isProductive, isLocked, isIdle]);
 
-  const badgeClass = isProductive
-    ? 'status-badge--productive'
-    : isLocked
-      ? 'status-badge--locked'
-      : 'status-badge--idle';
-
-  const label = isProductive ? 'Productive' : isLocked ? 'Locked' : 'Idle';
 
   return (
-    <div className={`status-badge ${badgeClass}`}>
+    <div className={cn("border rounded-xl gap-2.5 py-2 pr-4 pl-3 flex items-center select-none", {
+      "bg-productive/20 border-productive/50": isProductive,
+      "bg-locked/20 border-locked/50": isLocked,
+      "bg-idle/20 border-idle/50": isIdle,
+    })}>
       <span
-        className={`badge-dot ${isProductive ? 'badge-dot--active' : isLocked ? 'badge-dot--locked' : ''}`}
+        className={cn("w-2 h-2 rounded-full bg-accent shrink-0 animate-caret-blink fade-in-20", {
+          "bg-productive": isProductive,
+          "bg-locked": isLocked,
+          "bg-idle": isIdle,
+        })}
       />
-      <div>
-        <span className="badge-label">{label}</span>
-        <span className="badge-timer">{formatDuration(sessionDurationSecs)}</span>
+      <div className="flex items-center gap-x-2">
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        <span className="text-xs tabular-nums text-gray-500">{formatCurrentDistanceDateToNow(new Date(2026, 2, 17, 20, 19))}</span>
       </div>
     </div>
   );

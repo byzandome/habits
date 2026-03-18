@@ -18,14 +18,14 @@ function RootComponent() {
   }, [init]);
 
   return (
-    <>
-      <div className="app-shell">
+    <main className="h-screen w-screen overflow-hidden">
+      <div className="flex h-full w-full">
         <NavBar />
-        <main className="content-area">
+        <div className="flex-1 overflow-y-auto">
           <Outlet />
-        </main>
+        </div>
       </div>
-      {import.meta.env.DEV && <TanStackRouterDevtools />}
-    </>
+      {import.meta.env.DEV && <TanStackRouterDevtools position='bottom-right' />}
+    </main>
   );
 }
