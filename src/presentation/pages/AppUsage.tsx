@@ -277,11 +277,11 @@ export function AppUsage() {
                       {i + 1}
                     </span>
                     {/* App icon (native → favicon fallback → letter avatar) */}
-                    <AppIconImg appName={s.app_id} onColorReady={handleColorReady} />
+                    <AppIconImg appName={s.app_name} onColorReady={handleColorReady} />
                     {/* Human-readable app name */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       <span style={{ fontSize: 14, fontWeight: 500, color: '#E2E8F0' }}>
-                        {getDisplayName(s.app_id)}
+                        {getDisplayName(s.app_name)}
                       </span>
                       {/* {import.meta.env.DEV && s.exe_path && (
                         <span

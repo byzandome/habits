@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        entities::{App, AppUsage, Domain, DomainHistory},
+        entities::{App, AppUsageStat, Domain, DomainHistory},
         ports::{
             AppRepository, AppUsageRepository, DomainHistoryRepository, DomainRepository,
             SettingsRepository,
@@ -132,31 +132,34 @@ impl AppUsageRepository for SqliteDb {
             .map_err(|e| e.to_string())
     }
 
-    fn list_usages(&self, date: Option<&str>) -> Result<Vec<AppUsage>, String> {
+    fn list_usage_stats(&self, date: Option<&str>) -> Result<Vec<AppUsageStat>, String> {
         let conn = &mut *self.conn.lock().unwrap();
-        let mut query = app_usages::table
-            .select((
-                app_usages::id,
-                app_usages::start_at,
-                app_usages::duration_secs,
-                app_usages::end_at,
-                app_usages::app_id,
-            ))
-            .order(app_usages::start_at.desc())
-            .into_boxed();
         if let Some(d) = date {
-            query = query.filter(app_usages::start_at.like(format!("{d}%")));
-        }
-        query
-            .load::<(String, String, Option<i64>, Option<String>, Option<String>)>(conn)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|(id, start_at, duration_secs, end_at, app_id)| AppUsage {
-                        id, start_at, duration_secs, end_at, app_id,
-                    })
-                    .collect()
-            })
+            diesel::sql_query(
+                "SELECT app_id AS id, app_name AS app_id, \
+                 app_name, \
+                 total_duration_secs AS duration_secs, \
+                 first_usage_at AS start_at, \
+                 COALESCE(last_usage_at, '') AS end_at \
+                 FROM app_usage_stats WHERE usage_date = ? \
+                 ORDER BY total_duration_secs DESC"
+            )
+            .bind::<diesel::sql_types::Text, _>(d.to_string())
+            .load::<AppUsageStat>(conn)
             .map_err(|e| e.to_string())
+        } else {
+            diesel::sql_query(
+                "SELECT app_id AS id, app_name AS app_id, \
+                 app_name, \
+                 total_duration_secs AS duration_secs, \
+                 first_usage_at AS start_at, \
+                 COALESCE(last_usage_at, '') AS end_at \
+                 FROM app_usage_stats \
+                 ORDER BY total_duration_secs DESC"
+            )
+            .load::<AppUsageStat>(conn)
+            .map_err(|e| e.to_string())
+        }
     }
 }
 

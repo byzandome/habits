@@ -81,8 +81,8 @@ pub fn get_apps(state: State<'_, AppState>) -> Result<Vec<crate::domain::entitie
 pub fn get_app_usages(
     state: State<'_, AppState>,
     date: Option<String>,
-) -> Result<Vec<crate::domain::entities::AppUsage>, String> {
-    state.db.list_usages(date.as_deref())
+) -> Result<Vec<crate::domain::entities::AppUsageStat>, String> {
+    state.db.list_usage_stats(date.as_deref())
 }
 
 #[tauri::command]

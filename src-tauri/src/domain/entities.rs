@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // ── Persisted domain types ─────────────────────────────────────────────────────────────
@@ -9,15 +10,6 @@ pub struct App {
     pub name: String,
     pub path: String,
     pub color: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AppUsage {
-    pub id: String,
-    pub start_at: String,
-    pub duration_secs: Option<i64>,
-    pub end_at: Option<String>,
-    pub app_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,6 +27,24 @@ pub struct DomainHistory {
     pub start_at: String,
     pub end_at: Option<String>,
     pub duration_secs: Option<i64>,
+}
+
+// ── Aggregated view types ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone, QueryableByName)]
+pub struct AppUsageStat {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub id: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub app_id: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub app_name: String,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub duration_secs: i64,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub start_at: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub end_at: String,
 }
 
 // ── In-memory tracker state ─────────────────────────────────────────────────────────────

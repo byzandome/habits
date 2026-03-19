@@ -37,6 +37,7 @@ export interface Settings {
 export interface AppUsageStat {
   id: string;
   app_id: string;
+  app_name: string;
   duration_secs: number;
   start_at: string;
   end_at: string;

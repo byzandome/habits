@@ -1,4 +1,4 @@
-use super::entities::{App, AppUsage, Domain, DomainHistory};
+use super::entities::{App, AppUsageStat, Domain, DomainHistory};
 
 // ── Settings ───────────────────────────────────────────────────────────────────────
 
@@ -22,7 +22,8 @@ pub trait AppRepository: Send + Sync {
 pub trait AppUsageRepository: Send + Sync {
     fn begin_usage(&self, app_id: &str, start_at: &str) -> Result<String, String>;
     fn end_usage(&self, id: &str, end_at: &str, duration_secs: i64) -> Result<(), String>;
-    fn list_usages(&self, date: Option<&str>) -> Result<Vec<AppUsage>, String>;
+    // fn list_usages(&self, date: Option<&str>) -> Result<Vec<AppUsage>, String>;
+    fn list_usage_stats(&self, date: Option<&str>) -> Result<Vec<AppUsageStat>, String>;
 }
 
 // ── Domains (write-side reserved for browser-extension integration) ────────────

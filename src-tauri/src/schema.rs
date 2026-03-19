@@ -2,22 +2,6 @@
 // Regenerate with: diesel print-schema  (run from src-tauri/)
 
 diesel::table! {
-    settings (key) {
-        key -> Text,
-        value -> Nullable<Text>,
-    }
-}
-
-diesel::table! {
-    apps (id) {
-        id -> Text,
-        name -> Text,
-        path -> Text,
-        color -> Nullable<Text>,
-    }
-}
-
-diesel::table! {
     app_usages (id) {
         id -> Text,
         start_at -> Text,
@@ -28,10 +12,11 @@ diesel::table! {
 }
 
 diesel::table! {
-    domains (id) {
+    apps (id) {
         id -> Text,
-        url -> Text,
-        name -> Nullable<Text>,
+        name -> Text,
+        path -> Text,
+        color -> Nullable<Text>,
     }
 }
 
@@ -46,7 +31,22 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    domains (id) {
+        id -> Text,
+        url -> Text,
+        name -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    settings (key) {
+        key -> Text,
+        value -> Nullable<Text>,
+    }
+}
+
 diesel::joinable!(app_usages -> apps (app_id));
 diesel::joinable!(domain_history -> domains (domain_id));
 
-diesel::allow_tables_to_appear_in_same_query!(settings, apps, app_usages, domains, domain_history,);
+diesel::allow_tables_to_appear_in_same_query!(app_usages, apps, domain_history, domains, settings,);
