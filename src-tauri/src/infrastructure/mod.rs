@@ -1,5 +1,6 @@
 pub mod active_app;
-pub mod app_icon;
 pub mod db;
+pub mod icon;
 pub mod idle;
+pub mod models;
 pub mod tray_icon;

@@ -1,305 +1,244 @@
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, Result as SqlResult};
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use uuid::Uuid;
 
-use crate::domain::{
-    entities::{AppUsageStat, DailySummary, Interval, Session},
-    ports::{AppUsageRepository, SessionRepository, SettingsRepository},
+use crate::{
+    domain::{
+        entities::{App, AppUsage, Domain, DomainHistory},
+        ports::{
+            AppRepository, AppUsageRepository, DomainHistoryRepository, DomainRepository,
+            SettingsRepository,
+        },
+    },
+    schema::{app_usages, apps, domain_history, domains, settings},
 };
 
-// ── Concrete repository ───────────────────────────────────────────────────────
+use super::models::{NewApp, NewAppUsage, NewDomainHistory, NewDomain, NewSetting};
 
-/// Wraps a shared SQLite connection and implements all persistence port traits.
-/// All three repository traits are implemented on this single struct so the
-/// same underlying connection is reused across every operation.
 pub struct SqliteDb {
-    conn: Arc<Mutex<Connection>>,
+    conn: Arc<Mutex<SqliteConnection>>,
 }
 
 impl SqliteDb {
-    pub fn new(conn: Connection) -> Self {
-        Self {
-            conn: Arc::new(Mutex::new(conn)),
-        }
+    pub fn new(conn: SqliteConnection) -> Self {
+        Self { conn: Arc::new(Mutex::new(conn)) }
     }
 }
-
-// ── SessionRepository ─────────────────────────────────────────────────────────
-
-impl SessionRepository for SqliteDb {
-    fn begin_session(&self, date: &str, start: &DateTime<Utc>) -> Result<String, String> {
-        let id = Uuid::new_v4().to_string();
-        let start_str = start.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        let conn = self.conn.lock().unwrap();
-        // Upsert: if a session for this date already exists, keep it as-is and
-        // return its existing id; otherwise insert a fresh row.
-        conn.execute(
-            "INSERT INTO sessions (id, date, start_time) VALUES (?1, ?2, ?3)
-             ON CONFLICT(date) DO NOTHING",
-            params![id, date, start_str],
-        )
-        .map_err(|e| e.to_string())?;
-        // Always return the id that is actually stored for this date.
-        let stored_id: String = conn
-            .query_row(
-                "SELECT id FROM sessions WHERE date = ?1",
-                params![date],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(stored_id)
-    }
-
-    fn update_session_time(
-        &self,
-        id: &str,
-        active_secs: i64,
-        idle_secs: i64,
-        locked_secs: i64,
-    ) -> Result<(), String> {
-        let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        let conn = self.conn.lock().unwrap();
-        for (itype, secs) in [("active", active_secs), ("idle", idle_secs), ("locked", locked_secs)] {
-            let interval_id = format!("{}-{}", id, itype);
-            conn.execute(
-                "INSERT INTO intervals (id, session_id, type, start_time, duration_secs) \
-                 VALUES (?1, ?2, ?3, ?4, ?5) \
-                 ON CONFLICT(id) DO UPDATE SET duration_secs = excluded.duration_secs",
-                params![interval_id, id, itype, now, secs],
-            )
-            .map_err(|e| e.to_string())?;
-        }
-        Ok(())
-    }
-
-    fn end_session(&self, id: &str, end: &DateTime<Utc>) -> Result<(), String> {
-        let end_str = end.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "UPDATE sessions SET end_time = ?1 WHERE id = ?2",
-            params![end_str, id],
-        )
-        .map_err(|e| e.to_string())?;
-        conn.execute(
-            "UPDATE intervals SET end_time = ?1 WHERE session_id = ?2 AND end_time IS NULL",
-            params![end_str, id],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    fn get_session_for_date(&self, date: &str) -> Result<Option<Session>, String> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn
-            .prepare(
-                "SELECT session_id, date, start_time, end_time,
-                        active_secs, idle_secs, locked_secs, unknown_secs
-                 FROM session_stats
-                 WHERE date = ?1",
-            )
-            .map_err(|e| e.to_string())?;
-
-        let mut rows = stmt
-            .query_map(params![date], |row| {
-                Ok(Session {
-                    id: row.get(0)?,
-                    date: row.get(1)?,
-                    start_time: row.get(2)?,
-                    end_time: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                    active_secs: row.get(4)?,
-                    idle_secs: row.get(5)?,
-                    locked_secs: row.get(6)?,
-                    unknown_secs: row.get(7)?,
-                })
-            })
-            .map_err(|e| e.to_string())?;
-
-        match rows.next() {
-            None => Ok(None),
-            Some(r) => r.map(Some).map_err(|e| e.to_string()),
-        }
-    }
-
-    fn get_today_stats(&self, date: &str) -> Result<(i64, i64, i64), String> {
-        let conn = self.conn.lock().unwrap();
-        let row: (i64, i64, i64) = conn
-            .query_row(
-                "SELECT COALESCE(active_secs, 0),
-                        COALESCE(idle_secs,   0),
-                        COALESCE(locked_secs, 0)
-                 FROM session_stats
-                 WHERE date = ?1",
-                params![date],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .unwrap_or((0, 0, 0));
-        Ok(row)
-    }
-
-    fn get_history(&self, days: u32) -> Result<Vec<DailySummary>, String> {
-        let conn = self.conn.lock().unwrap();
-        let offset = format!("-{} days", days.saturating_sub(1));
-
-        let mut stmt = conn
-            .prepare(
-                "SELECT
-                     date,
-                     COALESCE(active_secs,  0) AS prod_secs,
-                     COALESCE(idle_secs,    0) AS idle_secs,
-                     COALESCE(locked_secs,  0) AS locked_secs
-                 FROM session_stats
-                 WHERE date >= date('now', 'localtime', ?1)
-                 ORDER BY date DESC",
-            )
-            .map_err(|e| e.to_string())?;
-
-        let rows = stmt
-            .query_map(params![offset], |row| {
-                Ok(DailySummary {
-                    date: row.get(0)?,
-                    productive_secs: row.get(1)?,
-                    idle_secs: row.get(2)?,
-                    locked_secs: row.get(3)?,
-                })
-            })
-            .map_err(|e| e.to_string())?;
-
-        rows.collect::<SqlResult<Vec<_>>>().map_err(|e| e.to_string())
-    }
-
-    fn get_intervals_for_session(&self, session_id: &str) -> Result<Vec<Interval>, String> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, session_id, app_usage_id, start_time, end_time, duration_secs, type
-                 FROM intervals
-                 WHERE session_id = ?1
-                 ORDER BY start_time ASC",
-            )
-            .map_err(|e| e.to_string())?;
-
-        let rows = stmt
-            .query_map(params![session_id], |row| {
-                Ok(Interval {
-                    id: row.get(0)?,
-                    session_id: row.get(1)?,
-                    app_usage_id: row.get(2)?,
-                    start_time: row.get(3)?,
-                    end_time: row.get(4)?,
-                    duration_secs: row.get(5)?,
-                    interval_type: row.get(6)?,
-                })
-            })
-            .map_err(|e| e.to_string())?;
-
-        rows.collect::<SqlResult<Vec<_>>>().map_err(|e| e.to_string())
-    }
-
-    fn clear_all_data(&self) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute_batch(
-            "DELETE FROM intervals;
-             DELETE FROM sessions;
-             DELETE FROM app_usage;",
-        )
-        .map_err(|e| e.to_string())
-    }
-}
-
-// ── AppUsageRepository ────────────────────────────────────────────────────────
-
-impl AppUsageRepository for SqliteDb {
-    fn upsert_app_usage(
-        &self,
-        app_name: &str,
-        date: &str,
-        duration_secs: i64,
-        exe_path: &str,
-    ) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "INSERT INTO app_usage (app_name, date, duration_secs, exe_path) VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(app_name, date) DO UPDATE SET
-                 duration_secs = duration_secs + excluded.duration_secs,
-                 exe_path = CASE WHEN excluded.exe_path != '' THEN excluded.exe_path ELSE exe_path END",
-            params![app_name, date, duration_secs, exe_path],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    fn get_app_usage_for_date(&self, date: &str) -> Result<Vec<AppUsageStat>, String> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn
-            .prepare(
-                "SELECT app_name, duration_secs, COALESCE(exe_path, ''), pct_of_day
-                 FROM app_usage_by_date
-                 WHERE date = ?1",
-            )
-            .map_err(|e| e.to_string())?;
-
-        let rows = stmt
-            .query_map(params![date], |row| {
-                Ok(AppUsageStat {
-                    app_name: row.get(0)?,
-                    duration_secs: row.get(1)?,
-                    exe_path: row.get(2)?,
-                    pct_of_day: row.get(3)?,
-                })
-            })
-            .map_err(|e| e.to_string())?;
-
-        rows.collect::<SqlResult<Vec<_>>>().map_err(|e| e.to_string())
-    }
-
-    fn get_exe_path_for_app(&self, app_name: &str) -> Result<Option<String>, String> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn
-            .prepare(
-                "SELECT exe_path FROM app_usage WHERE app_name = ?1 AND exe_path != '' LIMIT 1",
-            )
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![app_name]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
-            Ok(Some(row.get(0).map_err(|e| e.to_string())?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn clear_exe_path_cache(&self) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute("UPDATE app_usage SET exe_path = ''", [])
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-}
-
-// ── SettingsRepository ────────────────────────────────────────────────────────
 
 impl SettingsRepository for SqliteDb {
     fn get_setting(&self, key: &str) -> Result<Option<String>, String> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn
-            .prepare("SELECT value FROM settings WHERE key = ?1")
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![key]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
-            Ok(Some(row.get(0).map_err(|e| e.to_string())?))
-        } else {
-            Ok(None)
-        }
+        let conn = &mut *self.conn.lock().unwrap();
+        settings::table
+            .filter(settings::key.eq(key))
+            .select(settings::value)
+            .first::<Option<String>>(conn)
+            .optional()
+            .map(|opt| opt.flatten())
+            .map_err(|e| e.to_string())
     }
 
     fn set_setting(&self, key: &str, value: &str) -> Result<(), String> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
-            params![key, value],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::replace_into(settings::table)
+            .values(NewSetting { key, value: Some(value) })
+            .execute(conn)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl AppRepository for SqliteDb {
+    fn upsert_app(&self, name: &str, path: &str) -> Result<App, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        if let Some(row) = apps::table
+            .filter(apps::path.eq(path))
+            .select((apps::id, apps::name, apps::path, apps::color))
+            .first::<(String, String, String, Option<String>)>(conn)
+            .optional()
+            .map_err(|e| e.to_string())?
+        {
+            return Ok(App { id: row.0, name: row.1, path: row.2, color: row.3 });
+        }
+        let id = Uuid::new_v4().to_string();
+        diesel::insert_into(apps::table)
+            .values(NewApp { id: &id, name, path })
+            .execute(conn)
+            .map_err(|e| e.to_string())?;
+        Ok(App { id, name: name.to_string(), path: path.to_string(), color: None })
+    }
+
+    fn list_apps(&self) -> Result<Vec<App>, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        apps::table
+            .select((apps::id, apps::name, apps::path, apps::color))
+            .order(apps::name.asc())
+            .load::<(String, String, String, Option<String>)>(conn)
+            .map(|rows| rows.into_iter().map(|(id, name, path, color)| App { id, name, path, color }).collect())
+            .map_err(|e| e.to_string())
+    }
+
+    fn find_app_by_name(&self, name: &str) -> Result<Option<App>, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        apps::table
+            .filter(apps::name.eq(name))
+            .select((apps::id, apps::name, apps::path, apps::color))
+            .first::<(String, String, String, Option<String>)>(conn)
+            .optional()
+            .map(|opt| opt.map(|(id, name, path, color)| App { id, name, path, color }))
+            .map_err(|e| e.to_string())
+    }
+
+    fn update_app_color(&self, id: &str, color: Option<&str>) -> Result<(), String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::update(apps::table.filter(apps::id.eq(id)))
+            .set(apps::color.eq(color))
+            .execute(conn)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn reset_all_colors(&self) -> Result<(), String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::update(apps::table)
+            .set(apps::color.eq(None::<String>))
+            .execute(conn)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl AppUsageRepository for SqliteDb {
+    fn begin_usage(&self, app_id: &str, start_at: &str) -> Result<String, String> {
+        let id = Uuid::new_v4().to_string();
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::insert_into(app_usages::table)
+            .values(NewAppUsage { id: &id, start_at, app_id: Some(app_id) })
+            .execute(conn)
+            .map(|_| id)
+            .map_err(|e| e.to_string())
+    }
+
+    fn end_usage(&self, id: &str, end_at: &str, duration_secs: i64) -> Result<(), String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::update(app_usages::table.filter(app_usages::id.eq(id)))
+            .set((
+                app_usages::end_at.eq(end_at),
+                app_usages::duration_secs.eq(duration_secs),
+            ))
+            .execute(conn)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn list_usages(&self, date: Option<&str>) -> Result<Vec<AppUsage>, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        let mut query = app_usages::table
+            .select((
+                app_usages::id,
+                app_usages::start_at,
+                app_usages::duration_secs,
+                app_usages::end_at,
+                app_usages::app_id,
+            ))
+            .order(app_usages::start_at.desc())
+            .into_boxed();
+        if let Some(d) = date {
+            query = query.filter(app_usages::start_at.like(format!("{d}%")));
+        }
+        query
+            .load::<(String, String, Option<i64>, Option<String>, Option<String>)>(conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(id, start_at, duration_secs, end_at, app_id)| AppUsage {
+                        id, start_at, duration_secs, end_at, app_id,
+                    })
+                    .collect()
+            })
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl DomainRepository for SqliteDb {
+    fn upsert_domain(&self, url: &str, name: Option<&str>) -> Result<Domain, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        if let Some(row) = domains::table
+            .filter(domains::url.eq(url))
+            .select((domains::id, domains::url, domains::name))
+            .first::<(String, String, Option<String>)>(conn)
+            .optional()
+            .map_err(|e| e.to_string())?
+        {
+            return Ok(Domain { id: row.0, url: row.1, name: row.2 });
+        }
+        let id = Uuid::new_v4().to_string();
+        diesel::insert_into(domains::table)
+            .values(NewDomain { id: &id, url, name })
+            .execute(conn)
+            .map_err(|e| e.to_string())?;
+        Ok(Domain { id, url: url.to_string(), name: name.map(str::to_string) })
+    }
+
+    fn list_domains(&self) -> Result<Vec<Domain>, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        domains::table
+            .select((domains::id, domains::url, domains::name))
+            .order(domains::url.asc())
+            .load::<(String, String, Option<String>)>(conn)
+            .map(|rows| rows.into_iter().map(|(id, url, name)| Domain { id, url, name }).collect())
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl DomainHistoryRepository for SqliteDb {
+    fn begin_visit(&self, domain_id: &str, url: &str, start_at: &str) -> Result<String, String> {
+        let id = Uuid::new_v4().to_string();
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::insert_into(domain_history::table)
+            .values(NewDomainHistory { id: &id, domain_id, url, start_at })
+            .execute(conn)
+            .map(|_| id)
+            .map_err(|e| e.to_string())
+    }
+
+    fn end_visit(&self, id: &str, end_at: &str, duration_secs: i64) -> Result<(), String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        diesel::update(domain_history::table.filter(domain_history::id.eq(id)))
+            .set((
+                domain_history::end_at.eq(end_at),
+                domain_history::duration_secs.eq(duration_secs),
+            ))
+            .execute(conn)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn list_history(&self, date: Option<&str>) -> Result<Vec<DomainHistory>, String> {
+        let conn = &mut *self.conn.lock().unwrap();
+        let mut query = domain_history::table
+            .select((
+                domain_history::id,
+                domain_history::domain_id,
+                domain_history::url,
+                domain_history::start_at,
+                domain_history::end_at,
+                domain_history::duration_secs,
+            ))
+            .order(domain_history::start_at.desc())
+            .into_boxed();
+        if let Some(d) = date {
+            query = query.filter(domain_history::start_at.like(format!("{d}%")));
+        }
+        query
+            .load::<(String, String, String, String, Option<String>, Option<i64>)>(conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(id, domain_id, url, start_at, end_at, duration_secs)| DomainHistory {
+                        id, domain_id, url, start_at, end_at, duration_secs,
+                    })
+                    .collect()
+            })
+            .map_err(|e| e.to_string())
     }
 }

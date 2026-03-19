@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { Sessions } from '../pages/Sessions';
+import { Sessions } from '@/presentation/pages/Sessions';
 
 export const Route = createFileRoute('/sessions')({ component: Sessions });

@@ -1,45 +1,43 @@
-use chrono::{DateTime, Utc};
+use super::entities::{App, AppUsage, Domain, DomainHistory};
 
-use super::entities::{AppUsageStat, DailySummary, Interval, Session};
-
-// ── Session persistence ───────────────────────────────────────────────────────
-
-pub trait SessionRepository: Send + Sync {
-    /// Upsert the session for today's local date; returns its UUID.
-    fn begin_session(&self, date: &str, start: &DateTime<Utc>) -> Result<String, String>;
-    fn update_session_time(
-        &self,
-        id: &str,
-        active_secs: i64,
-        idle_secs: i64,
-        locked_secs: i64,
-    ) -> Result<(), String>;
-    fn end_session(&self, id: &str, end: &DateTime<Utc>) -> Result<(), String>;
-    fn get_session_for_date(&self, date: &str) -> Result<Option<Session>, String>;
-    fn get_today_stats(&self, date: &str) -> Result<(i64, i64, i64), String>;
-    fn get_history(&self, days: u32) -> Result<Vec<DailySummary>, String>;
-    fn get_intervals_for_session(&self, session_id: &str) -> Result<Vec<Interval>, String>;
-    fn clear_all_data(&self) -> Result<(), String>;
-}
-
-// ── App usage persistence ─────────────────────────────────────────────────────
-
-pub trait AppUsageRepository: Send + Sync {
-    fn upsert_app_usage(
-        &self,
-        app_name: &str,
-        date: &str,
-        duration_secs: i64,
-        exe_path: &str,
-    ) -> Result<(), String>;
-    fn get_app_usage_for_date(&self, date: &str) -> Result<Vec<AppUsageStat>, String>;
-    fn get_exe_path_for_app(&self, app_name: &str) -> Result<Option<String>, String>;
-    fn clear_exe_path_cache(&self) -> Result<(), String>;
-}
-
-// ── Settings persistence ──────────────────────────────────────────────────────
+// ── Settings ───────────────────────────────────────────────────────────────────────
 
 pub trait SettingsRepository: Send + Sync {
     fn get_setting(&self, key: &str) -> Result<Option<String>, String>;
     fn set_setting(&self, key: &str, value: &str) -> Result<(), String>;
+}
+
+// ── Apps ──────────────────────────────────────────────────────────────────────────
+
+pub trait AppRepository: Send + Sync {
+    fn upsert_app(&self, name: &str, path: &str) -> Result<App, String>;
+    fn list_apps(&self) -> Result<Vec<App>, String>;
+    fn find_app_by_name(&self, name: &str) -> Result<Option<App>, String>;
+    fn update_app_color(&self, id: &str, color: Option<&str>) -> Result<(), String>;
+    fn reset_all_colors(&self) -> Result<(), String>;
+}
+
+// ── App usages ──────────────────────────────────────────────────────────────────
+
+pub trait AppUsageRepository: Send + Sync {
+    fn begin_usage(&self, app_id: &str, start_at: &str) -> Result<String, String>;
+    fn end_usage(&self, id: &str, end_at: &str, duration_secs: i64) -> Result<(), String>;
+    fn list_usages(&self, date: Option<&str>) -> Result<Vec<AppUsage>, String>;
+}
+
+// ── Domains (write-side reserved for browser-extension integration) ────────────
+
+#[allow(dead_code)]
+pub trait DomainRepository: Send + Sync {
+    fn upsert_domain(&self, url: &str, name: Option<&str>) -> Result<Domain, String>;
+    fn list_domains(&self) -> Result<Vec<Domain>, String>;
+}
+
+// ── Domain history (write-side reserved for browser-extension integration) ─────
+
+#[allow(dead_code)]
+pub trait DomainHistoryRepository: Send + Sync {
+    fn begin_visit(&self, domain_id: &str, url: &str, start_at: &str) -> Result<String, String>;
+    fn end_visit(&self, id: &str, end_at: &str, duration_secs: i64) -> Result<(), String>;
+    fn list_history(&self, date: Option<&str>) -> Result<Vec<DomainHistory>, String>;
 }

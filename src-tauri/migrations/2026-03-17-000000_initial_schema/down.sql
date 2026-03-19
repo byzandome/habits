@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS domain_history;
+DROP TABLE IF EXISTS domains;
+DROP TABLE IF EXISTS app_usages;
+DROP TABLE IF EXISTS apps;
+DROP TABLE IF EXISTS settings;

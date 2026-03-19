@@ -26,3 +26,7 @@ dist-ssr
 
 # Intlayer
 .intlayer
+
+# Local environment variables (contains DATABASE_URL, etc.)
+.env
+.env.local
